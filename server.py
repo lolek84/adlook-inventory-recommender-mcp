@@ -414,6 +414,6 @@ def create_media_plan(
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8000))
-    os.environ.setdefault("FASTMCP_HOST", "0.0.0.0")
-    os.environ.setdefault("FASTMCP_PORT", str(port))
+    mcp.settings.host = "0.0.0.0"
+    mcp.settings.port = port
     mcp.run(transport="streamable-http")
