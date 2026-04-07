@@ -4,8 +4,18 @@ import json
 from typing import Optional
 import pandas as pd
 from mcp.server.fastmcp import FastMCP
+from mcp.server.fastmcp.server import TransportSecuritySettings
 
-mcp = FastMCP("adlook-inventory-recommender")
+_port = int(os.environ.get("PORT", 8000))
+
+mcp = FastMCP(
+    "adlook-inventory-recommender",
+    host="0.0.0.0",
+    port=_port,
+    transport_security=TransportSecuritySettings(
+        enable_dns_rebinding_protection=False,
+    ),
+)
 
 INVENTORY_DIR = os.environ.get("INVENTORY_DIR", ".")
 
@@ -413,7 +423,4 @@ def create_media_plan(
 
 
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 8000))
-    mcp.settings.host = "0.0.0.0"
-    mcp.settings.port = port
     mcp.run(transport="streamable-http")
