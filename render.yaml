@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: adlook-inventory-recommender-mcp
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: python server.py
+    envVars:
+      - key: PORT
+        generateValue: false
+      - key: INVENTORY_DIR
+        value: .
+    healthCheckPath: /mcp
