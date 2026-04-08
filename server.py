@@ -20,7 +20,7 @@ mcp = FastMCP(
 INVENTORY_DIR = os.environ.get("INVENTORY_DIR", ".")
 INVENTORY_FILE = os.environ.get(
     "INVENTORY_FILE",
-    "inventory_20251005_20260402_with_country.csv",
+    "inventory_20251004_20260406.csv",
 )
 
 # IAB category mapping per industry
