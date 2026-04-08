@@ -23,6 +23,9 @@ INVENTORY_FILE = os.environ.get(
     "inventory_20251005_20260402_with_country.csv",
 )
 
+OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
+OPENAI_MODEL = os.environ.get("OPENAI_MODEL", "gpt-4o-mini")
+
 # IAB category mapping per industry
 INDUSTRY_MAP = {
     "fitness":      {"iab": ["IAB7"], "content": ["health", "sports"], "audience": ["mass_reach", "young_adults"]},
@@ -45,6 +48,189 @@ INDUSTRY_MAP = {
     "entertainment":{"iab": ["IAB1"], "content": ["entertainment", "streaming"], "audience": ["mass_reach", "young_adults"]},
     "travel":       {"iab": ["IAB20"], "content": ["other"],           "audience": ["mass_reach", "high_income"]},
 }
+
+ALLOWED_INDUSTRIES = frozenset(INDUSTRY_MAP.keys())
+
+_BRIEF_JSON_INSTRUCTIONS = """Zwróć WYŁĄCZNIE jeden obiekt JSON (bez markdown) z polami:
+- industry: string lub null — jedna z listy: fitness, sport, health, food, fmcg, automotive, finance, banking, ecommerce, retail, tech, gaming, fashion, beauty, education, family, news, entertainment, travel; null jeśli nie da się sensownie przypisać
+- campaign_goal: jedna z: awareness, consideration, performance
+- budget_usd: number lub null (tylko jeśli w briefie jest kwota lub jednoznacznie można ją wywnioskować)
+- countries: tablica kodów ISO 3166-1 alpha-2 WIELKIMI LITERAMI (np. PL, US) lub null
+- preferred_formats: tablica z: VIDEO, DISPLAY, NATIVE lub null (null = wybierz wg campaign_goal)
+- preferred_devices: tablica z: Mobile, Desktop, CTV lub null
+- content_types: tablica stringów typów treści do filtrowania inventory (np. health, gaming, technology) lub null — używaj tylko jeśli brief to sugeruje wyraźniej niż sama branża
+- audience_profiles: tablica (np. young_adults, mass_reach) lub null
+- confidence: number od 0 do 1 — pewność co do industry i campaign_goal
+- brief_summary_pl: jedno zdanie po polsku: o co chodzi w kampanii"""
+
+
+def _parse_brief_with_llm(client_brief: str) -> tuple[dict, Optional[str]]:
+    """Call OpenAI to extract structured fields. Returns (data, error_message)."""
+    try:
+        from openai import OpenAI
+    except ImportError as e:
+        return {}, f"openai package not installed: {e}"
+
+    if not OPENAI_API_KEY:
+        return {}, "OPENAI_API_KEY not set"
+
+    try:
+        client = OpenAI(api_key=OPENAI_API_KEY)
+        user_msg = f"Brief klienta:\n\n{client_brief.strip()}\n\n{_BRIEF_JSON_INSTRUCTIONS}"
+        resp = client.chat.completions.create(
+            model=OPENAI_MODEL,
+            messages=[
+                {
+                    "role": "system",
+                    "content": "Jesteś analitykiem planowania mediów. Odpowiadasz tylko poprawnym JSON bez komentarzy.",
+                },
+                {"role": "user", "content": user_msg},
+            ],
+            response_format={"type": "json_object"},
+            temperature=0.2,
+        )
+        raw = (resp.choices[0].message.content or "").strip()
+        data = json.loads(raw)
+    except json.JSONDecodeError as e:
+        return {}, f"Invalid JSON from model: {e}"
+    except Exception as e:
+        return {}, str(e)
+    return data, None
+
+
+def _normalize_llm_industry(raw: Optional[str]) -> Optional[str]:
+    if not raw or not isinstance(raw, str):
+        return None
+    key = raw.strip().lower()
+    if key in ALLOWED_INDUSTRIES:
+        return key
+    return None
+
+
+def _normalize_campaign_goal(raw: Optional[str]) -> str:
+    if not raw or not isinstance(raw, str):
+        return "awareness"
+    g = raw.strip().lower()
+    if g in ("awareness", "consideration", "performance"):
+        return g
+    return "awareness"
+
+
+def _merge_brief_params(
+    client_brief: str,
+    budget_usd: Optional[float],
+    countries: Optional[list[str]],
+    campaign_goal: Optional[str],
+    preferred_formats: Optional[list[str]],
+    preferred_devices: Optional[list[str]],
+    parsed: Optional[dict],
+    llm_error: Optional[str],
+) -> tuple[
+    Optional[str],
+    str,
+    Optional[float],
+    Optional[list[str]],
+    Optional[list[str]],
+    Optional[list[str]],
+    Optional[list[str]],
+    Optional[list[str]],
+    dict,
+]:
+    """
+    Merge explicit tool arguments with LLM output. Explicit non-None args win.
+    Returns (industry, campaign_goal, budget, countries, formats, devices, content_types, audience_profiles, meta).
+    meta: llm_used, confidence, brief_summary_pl, llm_error
+    """
+    meta: dict = {
+        "llm_used": bool(parsed is not None and not llm_error),
+        "confidence": None,
+        "brief_summary_pl": None,
+        "llm_error": llm_error,
+    }
+
+    if llm_error or parsed is None:
+        industry = _detect_industry(client_brief)
+        goal = _normalize_campaign_goal(campaign_goal)
+        return (
+            industry,
+            goal,
+            budget_usd,
+            countries,
+            preferred_formats,
+            preferred_devices,
+            None,
+            None,
+            meta,
+        )
+
+    meta["confidence"] = parsed.get("confidence")
+    if isinstance(meta["confidence"], (int, float)):
+        meta["confidence"] = float(meta["confidence"])
+    else:
+        meta["confidence"] = None
+    bs = parsed.get("brief_summary_pl")
+    meta["brief_summary_pl"] = bs if isinstance(bs, str) else None
+
+    ind = _normalize_llm_industry(parsed.get("industry")) or _detect_industry(client_brief)
+    if campaign_goal is not None:
+        goal = _normalize_campaign_goal(campaign_goal)
+    else:
+        goal = _normalize_campaign_goal(parsed.get("campaign_goal"))
+
+    eff_budget = budget_usd if budget_usd is not None else parsed.get("budget_usd")
+    if eff_budget is not None:
+        try:
+            eff_budget = float(eff_budget)
+        except (TypeError, ValueError):
+            eff_budget = budget_usd
+
+    eff_countries = countries if countries is not None else parsed.get("countries")
+    if eff_countries is not None and not isinstance(eff_countries, list):
+        eff_countries = countries
+
+    eff_formats = preferred_formats if preferred_formats is not None else parsed.get("preferred_formats")
+    if eff_formats is not None:
+        if isinstance(eff_formats, list):
+            eff_formats = [str(x).upper() for x in eff_formats if x]
+        else:
+            eff_formats = preferred_formats
+
+    eff_devices = preferred_devices if preferred_devices is not None else parsed.get("preferred_devices")
+    if eff_devices is not None and not isinstance(eff_devices, list):
+        eff_devices = preferred_devices
+
+    ct = parsed.get("content_types")
+    if ct is not None and not isinstance(ct, list):
+        ct = None
+    ap = parsed.get("audience_profiles")
+    if ap is not None and not isinstance(ap, list):
+        ap = None
+
+    mapping = INDUSTRY_MAP.get(ind.lower(), {}) if ind else {}
+    if not ct and mapping.get("content"):
+        ct = mapping["content"]
+    if not ap and mapping.get("audience"):
+        ap = mapping["audience"]
+
+    return ind, goal, eff_budget, eff_countries, eff_formats, eff_devices, ct, ap, meta
+
+
+def _placement_rationale(p: dict, industry: Optional[str]) -> str:
+    parts: list[str] = []
+    pt = p.get("publisher_tier", "")
+    if pt:
+        parts.append(f"Wydawca: tier {pt}")
+    try:
+        v = float(p.get("viewability", 0))
+        parts.append(f"viewability {v:.0%}")
+    except (TypeError, ValueError):
+        pass
+    ct = p.get("content_type", "")
+    if ct:
+        parts.append(f"typ treści: {ct}")
+    if industry:
+        parts.append(f"branża briefu: {industry}")
+    return "; ".join(parts) if parts else "Dopasowanie według progów jakościowych i filtrów."
 
 
 def _load_latest_inventory() -> tuple[pd.DataFrame, str]:
@@ -197,8 +383,8 @@ def find_placements(
         dev_lower = [d.lower() for d in devices]
         df = df[df["device_type"].str.lower().isin(dev_lower)]
 
-    # Country
-    if countries:
+    # Country (avoid pandas edge case: boolean mask on 0-row frame can drop columns)
+    if countries and len(df) > 0:
         country_upper = [c.upper() for c in countries] + ["GLOBAL"]
         df = df[df["country_focus"].apply(
             lambda x: any(c in str(x).upper() for c in country_upper)
@@ -252,11 +438,38 @@ def find_placements(
 
 
 @mcp.tool()
+def parse_client_brief(client_brief: str) -> dict:
+    """
+    Wyciąga z briefu strukturalne parametry (OpenAI), gdy ustawione jest OPENAI_API_KEY.
+    Bez klucza zwraca heurystykę (_detect_industry).
+    """
+    if not OPENAI_API_KEY:
+        return {
+            "llm_available": False,
+            "heuristic_industry": _detect_industry(client_brief),
+            "note": "Ustaw OPENAI_API_KEY, aby włączyć parsowanie przez model.",
+        }
+    data, err = _parse_brief_with_llm(client_brief)
+    if err:
+        return {
+            "llm_available": True,
+            "error": err,
+            "heuristic_industry": _detect_industry(client_brief),
+        }
+    return {
+        "llm_available": True,
+        "parsed": data,
+        "normalized_industry": _normalize_llm_industry(data.get("industry"))
+        or _detect_industry(client_brief),
+    }
+
+
+@mcp.tool()
 def create_media_plan(
     client_brief: str,
     budget_usd: Optional[float] = None,
     countries: Optional[list[str]] = None,
-    campaign_goal: str = "awareness",
+    campaign_goal: Optional[str] = None,
     preferred_formats: Optional[list[str]] = None,
     preferred_devices: Optional[list[str]] = None,
     min_viewability: float = 0.70,
@@ -264,12 +477,17 @@ def create_media_plan(
     """
     Generate a complete media plan recommendation based on a natural-language client brief.
 
+    When OPENAI_API_KEY is set, the brief is parsed by the configured LLM (OPENAI_MODEL)
+    to infer industry, goal, budget, countries, formats and devices. Explicit tool
+    arguments override model output. Without a key, behavior matches legacy heuristics.
+
     Args:
         client_brief: Free-text description of the client and campaign
                       (e.g. 'fitness app targeting young adults in Poland').
-        budget_usd: Total campaign budget in USD. Optional.
-        countries: Target country codes (e.g. ['PL']). Optional.
-        campaign_goal: 'awareness' | 'consideration' | 'performance'. Default 'awareness'.
+        budget_usd: Total campaign budget in USD. Optional; overrides LLM if set.
+        countries: Target country codes (e.g. ['PL']). Optional; overrides LLM if set.
+        campaign_goal: 'awareness' | 'consideration' | 'performance'. Optional; if
+                      omitted and LLM is enabled, inferred from the brief.
         preferred_formats: Override format selection (e.g. ['VIDEO']).
         preferred_devices: Override device selection (e.g. ['Mobile']).
         min_viewability: Minimum viewability threshold. Default 0.70.
@@ -278,41 +496,53 @@ def create_media_plan(
         Structured media plan with selected placements, budget allocation,
         KPI projections, and strategic recommendations.
     """
+    parsed: Optional[dict] = None
+    llm_err: Optional[str] = None
+    if OPENAI_API_KEY:
+        parsed, llm_err = _parse_brief_with_llm(client_brief)
+
+    (
+        industry,
+        campaign_goal_eff,
+        budget_eff,
+        countries_eff,
+        eff_formats,
+        eff_devices,
+        content_types,
+        audience_profiles,
+        brief_meta,
+    ) = _merge_brief_params(
+        client_brief,
+        budget_usd,
+        countries,
+        campaign_goal,
+        preferred_formats,
+        preferred_devices,
+        parsed if not llm_err else None,
+        llm_err,
+    )
+
     brief_lower = client_brief.lower()
 
-    # Detect industry
-    industry = _detect_industry(client_brief)
-    mapping = INDUSTRY_MAP.get(industry, {}) if industry else {}
-
     # Resolve formats based on goal
-    if preferred_formats:
-        formats = [f.upper() for f in preferred_formats]
-    elif campaign_goal == "awareness":
+    if eff_formats:
+        formats = [f.upper() for f in eff_formats]
+    elif campaign_goal_eff == "awareness":
         formats = ["VIDEO"]
-    elif campaign_goal == "consideration":
+    elif campaign_goal_eff == "consideration":
         formats = ["VIDEO", "DISPLAY"]
-    else:  # performance
+    else:
         formats = ["DISPLAY", "NATIVE"]
 
     # Resolve devices
-    if preferred_devices:
-        devices = preferred_devices
+    if eff_devices:
+        devices = eff_devices
     elif "desktop" in brief_lower:
         devices = ["Desktop"]
     elif "ctv" in brief_lower or "tv" in brief_lower:
         devices = ["CTV", "Mobile"]
     else:
         devices = ["Mobile", "Desktop"]
-
-    # Resolve audience
-    audience_profiles = mapping.get("audience") or None
-    content_types = mapping.get("content") or None
-
-    # Publisher tier strategy: premium-first for awareness/consideration
-    if campaign_goal == "performance":
-        publisher_tiers = ["premium", "mid-tier", "long-tail"]
-    else:
-        publisher_tiers = ["premium", "mid-tier"]
 
     # First pass: premium placements
     premium_result = find_placements(
@@ -321,20 +551,19 @@ def create_media_plan(
         audience_profiles=audience_profiles,
         formats=formats,
         devices=devices,
-        countries=countries,
+        countries=countries_eff,
         min_viewability=min_viewability,
         min_quality_score=0.85,
         max_brand_safety_risk="low",
         publisher_tiers=["premium"],
-        budget_usd=budget_usd * 0.6 if budget_usd else None,
+        budget_usd=budget_eff * 0.6 if budget_eff else None,
         limit=20,
     )
 
-    # Second pass: mid-tier to fill remaining budget
     remaining_budget = None
-    if budget_usd:
+    if budget_eff:
         spent = premium_result["summary"]["total_spend_usd"]
-        remaining_budget = max(0, budget_usd - spent)
+        remaining_budget = max(0, budget_eff - spent)
 
     midtier_result = find_placements(
         industry=industry,
@@ -342,7 +571,7 @@ def create_media_plan(
         audience_profiles=audience_profiles,
         formats=formats,
         devices=devices,
-        countries=countries,
+        countries=countries_eff,
         min_viewability=min_viewability - 0.05,
         min_quality_score=0.80,
         max_brand_safety_risk="low",
@@ -351,7 +580,6 @@ def create_media_plan(
         limit=30,
     )
 
-    # Merge and deduplicate placements
     all_placements = premium_result["placements"] + midtier_result["placements"]
     seen = set()
     unique_placements = []
@@ -361,7 +589,9 @@ def create_media_plan(
             seen.add(key)
             unique_placements.append(p)
 
-    # Aggregate KPIs
+    for p in unique_placements:
+        p["rationale_pl"] = _placement_rationale(p, industry)
+
     total_impressions = sum(p.get("impressions", 0) for p in unique_placements)
     total_viewable = sum(p.get("viewable_impressions", 0) for p in unique_placements)
     total_clicks = sum(p.get("clicks", 0) for p in unique_placements)
@@ -387,18 +617,17 @@ def create_media_plan(
         total = sum(counts.values()) or 1
         return {k: round(v / total * 100, 1) for k, v in counts.items()}
 
-    # Strategic recommendations
     recommendations = []
     if avg_viewability < 0.75:
         recommendations.append("Rozważ podniesienie progu viewability do 0.75 – obecna średnia jest blisko limitu.")
-    if "VIDEO" not in formats_used and campaign_goal == "awareness":
+    if "VIDEO" not in formats_used and campaign_goal_eff == "awareness":
         recommendations.append("Dla kampanii awareness wideo jest kluczowe – rozszerz formaty o VIDEO.")
     if total_impressions > 0 and total_clicks / total_impressions < 0.003:
         recommendations.append("Niski CTR – rozważ optymalizację kreacji lub przejście na targeting performance.")
     if len(unique_placements) < 5:
         recommendations.append("Mała liczba placementów – rozszerz kryteria (więcej kategorii lub mniejszy min. quality score).")
-    if budget_usd and total_spend < budget_usd * 0.7:
-        recommendations.append(f"Budżet wykorzystany w {round(total_spend/budget_usd*100)}% – rozważ dodanie long-tail publisherów.")
+    if budget_eff and total_spend < budget_eff * 0.7:
+        recommendations.append(f"Budżet wykorzystany w {round(total_spend/budget_eff*100)}% – rozważ dodanie long-tail publisherów.")
 
     if not recommendations:
         recommendations.append("Plan spełnia standardy jakościowe – monitoruj viewability i CTR w trakcie kampanii.")
@@ -409,11 +638,18 @@ def create_media_plan(
         "media_plan": {
             "source_file": filename,
             "client_brief": client_brief,
+            "brief_parsing": {
+                "llm_used": brief_meta.get("llm_used"),
+                "openai_model": OPENAI_MODEL if OPENAI_API_KEY else None,
+                "confidence": brief_meta.get("confidence"),
+                "brief_summary_pl": brief_meta.get("brief_summary_pl"),
+                "llm_error": brief_meta.get("llm_error"),
+            },
             "detected_industry": industry,
-            "campaign_goal": campaign_goal,
+            "campaign_goal": campaign_goal_eff,
             "formats_requested": formats,
             "devices_requested": devices,
-            "countries": countries or ["GLOBAL"],
+            "countries": countries_eff or ["GLOBAL"],
             "placements_count": len(unique_placements),
             "placements": unique_placements,
             "kpis": {
@@ -421,8 +657,8 @@ def create_media_plan(
                 "total_viewable_impressions": total_viewable,
                 "total_clicks": total_clicks,
                 "total_spend_usd": round(total_spend, 2),
-                "budget_usd": budget_usd,
-                "budget_utilization_pct": round(total_spend / budget_usd * 100, 1) if budget_usd else None,
+                "budget_usd": budget_eff,
+                "budget_utilization_pct": round(total_spend / budget_eff * 100, 1) if budget_eff else None,
                 "avg_viewability_pct": round(avg_viewability * 100, 1),
                 "avg_ctr_pct": round(avg_ctr * 100, 3),
                 "avg_ecpm_usd": round(total_spend / total_impressions * 1000, 4) if total_impressions else 0,
