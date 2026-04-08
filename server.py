@@ -51,6 +51,26 @@ INDUSTRY_MAP = {
 
 ALLOWED_INDUSTRIES = frozenset(INDUSTRY_MAP.keys())
 
+_AGENT_PROMPT_CACHE: Optional[str] = None
+
+
+def _get_agent_prompt_text() -> str:
+    """Load AGENT_PROMPT.md once (same directory as server.py). Empty if missing."""
+    global _AGENT_PROMPT_CACHE
+    if _AGENT_PROMPT_CACHE is not None:
+        return _AGENT_PROMPT_CACHE
+    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "AGENT_PROMPT.md")
+    override = os.environ.get("AGENT_PROMPT_PATH")
+    if override:
+        path = override
+    try:
+        with open(path, encoding="utf-8") as f:
+            _AGENT_PROMPT_CACHE = f.read()
+    except OSError:
+        _AGENT_PROMPT_CACHE = ""
+    return _AGENT_PROMPT_CACHE
+
+
 _BRIEF_JSON_INSTRUCTIONS = """Zwróć WYŁĄCZNIE jeden obiekt JSON (bez markdown) z polami:
 - industry: string lub null — jedna z listy: fitness, sport, health, food, fmcg, automotive, finance, banking, ecommerce, retail, tech, gaming, fashion, beauty, education, family, news, entertainment, travel; null jeśli nie da się sensownie przypisać
 - campaign_goal: jedna z: awareness, consideration, performance
@@ -74,16 +94,27 @@ def _parse_brief_with_llm(client_brief: str) -> tuple[dict, Optional[str]]:
     if not OPENAI_API_KEY:
         return {}, "OPENAI_API_KEY not set"
 
+    agent_doc = _get_agent_prompt_text()
+    if agent_doc.strip():
+        system_content = (
+            f"{agent_doc}\n\n---\n\n"
+            "Jesteś backendem narzędzia MCP: z briefu klienta wyłuskujesz pola strukturalne "
+            "do filtrowania inventory zgodnie z instrukcją JSON od użytkownika. "
+            "W CSV kolumna kraju może nazywać się `country` lub `country_focus` (synonimy). "
+            "Odpowiadasz wyłącznie jednym poprawnym obiektem JSON, bez markdown, bez tekstu poza JSON."
+        )
+    else:
+        system_content = (
+            "Jesteś analitykiem planowania mediów. Odpowiadasz tylko poprawnym JSON bez komentarzy."
+        )
+
     try:
         client = OpenAI(api_key=OPENAI_API_KEY)
         user_msg = f"Brief klienta:\n\n{client_brief.strip()}\n\n{_BRIEF_JSON_INSTRUCTIONS}"
         resp = client.chat.completions.create(
             model=OPENAI_MODEL,
             messages=[
-                {
-                    "role": "system",
-                    "content": "Jesteś analitykiem planowania mediów. Odpowiadasz tylko poprawnym JSON bez komentarzy.",
-                },
+                {"role": "system", "content": system_content},
                 {"role": "user", "content": user_msg},
             ],
             response_format={"type": "json_object"},
@@ -443,9 +474,11 @@ def parse_client_brief(client_brief: str) -> dict:
     Wyciąga z briefu strukturalne parametry (OpenAI), gdy ustawione jest OPENAI_API_KEY.
     Bez klucza zwraca heurystykę (_detect_industry).
     """
+    ap_loaded = bool(_get_agent_prompt_text().strip())
     if not OPENAI_API_KEY:
         return {
             "llm_available": False,
+            "agent_prompt_loaded": ap_loaded,
             "heuristic_industry": _detect_industry(client_brief),
             "note": "Ustaw OPENAI_API_KEY, aby włączyć parsowanie przez model.",
         }
@@ -453,11 +486,13 @@ def parse_client_brief(client_brief: str) -> dict:
     if err:
         return {
             "llm_available": True,
+            "agent_prompt_loaded": ap_loaded,
             "error": err,
             "heuristic_industry": _detect_industry(client_brief),
         }
     return {
         "llm_available": True,
+        "agent_prompt_loaded": ap_loaded,
         "parsed": data,
         "normalized_industry": _normalize_llm_industry(data.get("industry"))
         or _detect_industry(client_brief),
@@ -641,6 +676,7 @@ def create_media_plan(
             "brief_parsing": {
                 "llm_used": brief_meta.get("llm_used"),
                 "openai_model": OPENAI_MODEL if OPENAI_API_KEY else None,
+                "agent_prompt_loaded": bool(_get_agent_prompt_text().strip()),
                 "confidence": brief_meta.get("confidence"),
                 "brief_summary_pl": brief_meta.get("brief_summary_pl"),
                 "llm_error": brief_meta.get("llm_error"),
