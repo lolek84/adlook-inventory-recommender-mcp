@@ -18,6 +18,10 @@ mcp = FastMCP(
 )
 
 INVENTORY_DIR = os.environ.get("INVENTORY_DIR", ".")
+INVENTORY_FILE = os.environ.get(
+    "INVENTORY_FILE",
+    "inventory_20251005_20260402_with_country.csv",
+)
 
 # IAB category mapping per industry
 INDUSTRY_MAP = {
@@ -44,11 +48,16 @@ INDUSTRY_MAP = {
 
 
 def _load_latest_inventory() -> tuple[pd.DataFrame, str]:
-    pattern = os.path.join(INVENTORY_DIR, "inventory_*.csv")
-    files = sorted(glob.glob(pattern))
-    if not files:
-        raise FileNotFoundError(f"No inventory_*.csv files found in {INVENTORY_DIR}")
-    path = files[-1]
+    path = os.path.join(INVENTORY_DIR, INVENTORY_FILE)
+    if not os.path.isfile(path):
+        pattern = os.path.join(INVENTORY_DIR, "inventory_*.csv")
+        files = sorted(glob.glob(pattern))
+        if not files:
+            raise FileNotFoundError(f"No inventory_*.csv files found in {INVENTORY_DIR}")
+        raise FileNotFoundError(
+            f"Configured inventory file not found: {INVENTORY_FILE}. "
+            f"Available files: {', '.join(os.path.basename(f) for f in files)}"
+        )
     df = pd.read_csv(path)
     df.columns = df.columns.str.strip().str.lstrip("\ufeff")
     # Normalize string columns

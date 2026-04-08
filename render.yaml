@@ -9,4 +9,6 @@ services:
         generateValue: false
       - key: INVENTORY_DIR
         value: .
+      - key: INVENTORY_FILE
+        value: inventory_20251005_20260402_with_country.csv
     healthCheckPath: /mcp
