@@ -60,10 +60,13 @@ def _load_latest_inventory() -> tuple[pd.DataFrame, str]:
         )
     df = pd.read_csv(path)
     df.columns = df.columns.str.strip().str.lstrip("\ufeff")
+    # Newer exports use `country`; legacy files use `country_focus`
+    if "country_focus" not in df.columns and "country" in df.columns:
+        df["country_focus"] = df["country"]
     # Normalize string columns
     for col in ["brand_safety_risk", "publisher_tier", "line_item_type",
                 "device_type", "environment", "content_type", "audience_profile",
-                "geo_focus", "iab_category", "iab_category_secondary"]:
+                "geo_focus", "country_focus", "iab_category", "iab_category_secondary"]:
         if col in df.columns:
             df[col] = df[col].astype(str).str.strip().str.lower()
     return df, os.path.basename(path)
