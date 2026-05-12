@@ -434,10 +434,6 @@ def find_placements(
     df["_score"] = df["quality_score"].astype(float) * df["cost_efficiency_score"].astype(float)
     df = df.sort_values(["_tier_rank", "_score"], ascending=[True, False])
 
-    if budget_usd:
-        df["_cumulative_spend"] = df["total_spend_usd"].astype(float).cumsum()
-        df = df[df["_cumulative_spend"] <= budget_usd]
-
     df = df.head(limit)
 
     cols = [
@@ -564,6 +560,18 @@ def create_media_plan(
     else:
         devices = ["Mobile", "Desktop"]
 
+    # Scale placement limits proportionally to budget
+    if not budget_eff:
+        prem_limit, mid_limit = 20, 30
+    elif budget_eff < 3_000:
+        prem_limit, mid_limit = 10, 10
+    elif budget_eff < 10_000:
+        prem_limit, mid_limit = 20, 20
+    elif budget_eff < 30_000:
+        prem_limit, mid_limit = 30, 30
+    else:
+        prem_limit, mid_limit = 40, 40
+
     premium_result = find_placements(
         industry=industry,
         content_types=content_types,
@@ -575,14 +583,25 @@ def create_media_plan(
         min_quality_score=0.85,
         max_brand_safety_risk="low",
         publisher_tiers=["premium"],
-        budget_usd=budget_eff * 0.6 if budget_eff else None,
-        limit=20,
+        limit=prem_limit,
     )
 
-    remaining_budget = None
-    if budget_eff:
-        spent = premium_result["summary"]["total_spend_usd"]
-        remaining_budget = max(0, budget_eff - spent)
+    # Fallback: if no placements found with selected formats, widen to all formats
+    if premium_result["summary"]["matched_placements"] == 0 and formats != ["DISPLAY", "NATIVE", "VIDEO"]:
+        formats = ["DISPLAY", "VIDEO", "NATIVE"]
+        premium_result = find_placements(
+            industry=industry,
+            content_types=content_types,
+            audience_profiles=audience_profiles,
+            formats=formats,
+            devices=devices,
+            countries=countries_eff,
+            min_viewability=min_viewability,
+            min_quality_score=0.85,
+            max_brand_safety_risk="low",
+            publisher_tiers=["premium"],
+            limit=prem_limit,
+        )
 
     midtier_result = find_placements(
         industry=industry,
@@ -595,8 +614,7 @@ def create_media_plan(
         min_quality_score=0.80,
         max_brand_safety_risk="low",
         publisher_tiers=["mid-tier"],
-        budget_usd=remaining_budget,
-        limit=30,
+        limit=mid_limit,
     )
 
     all_placements = premium_result["placements"] + midtier_result["placements"]
@@ -608,10 +626,11 @@ def create_media_plan(
             seen.add(key)
             unique_placements.append(p)
 
-    total_impressions = sum(float(p.get("impressions", 0)) for p in unique_placements)
-    total_viewable = sum(float(p.get("viewable_impressions", 0)) for p in unique_placements)
-    total_clicks = sum(float(p.get("clicks", 0)) for p in unique_placements)
-    total_spend = sum(float(p.get("total_spend_usd", 0)) for p in unique_placements)
+    # Inventory totals (historical baseline)
+    inv_impressions = sum(float(p.get("impressions", 0)) for p in unique_placements)
+    inv_viewable = sum(float(p.get("viewable_impressions", 0)) for p in unique_placements)
+    inv_clicks = sum(float(p.get("clicks", 0)) for p in unique_placements)
+
     avg_viewability = (
         sum(float(p.get("viewability", 0)) for p in unique_placements) / len(unique_placements)
         if unique_placements else 0
@@ -621,12 +640,34 @@ def create_media_plan(
         if unique_placements else 0
     )
 
+    # Budget allocation: distribute budget proportionally by impression share,
+    # then project impressions at that allocated spend using each placement's eCPM.
+    if budget_eff and inv_impressions > 0:
+        for p in unique_placements:
+            share = float(p.get("impressions", 0)) / inv_impressions
+            alloc = round(budget_eff * share, 2)
+            ecpm = float(p.get("ecpm_usd") or 0)
+            p["allocated_budget_usd"] = alloc
+            p["projected_impressions"] = int(alloc / ecpm * 1000) if ecpm > 0 else 0
+        proj_impressions = sum(p["projected_impressions"] for p in unique_placements)
+        proj_viewable = int(proj_impressions * avg_viewability)
+        proj_clicks = int(proj_impressions * avg_ctr)
+        proj_spend = budget_eff
+        budget_utilization = 100.0
+    else:
+        proj_impressions = int(inv_impressions)
+        proj_viewable = int(inv_viewable)
+        proj_clicks = int(inv_clicks)
+        proj_spend = sum(float(p.get("total_spend_usd", 0)) for p in unique_placements)
+        budget_utilization = None
+
     formats_used: dict = {}
     devices_used: dict = {}
+    proj_imp_key = "projected_impressions" if budget_eff else "impressions"
     for p in unique_placements:
         f = p.get("line_item_type", "UNKNOWN").upper()
         d = p.get("device_type", "unknown").lower()
-        imp = float(p.get("impressions", 0))
+        imp = float(p.get(proj_imp_key, p.get("impressions", 0)))
         formats_used[f] = formats_used.get(f, 0) + imp
         devices_used[d] = devices_used.get(d, 0) + imp
 
@@ -639,12 +680,10 @@ def create_media_plan(
         recommendations.append("Rozważ podniesienie progu viewability do 0.75 – obecna średnia jest blisko limitu.")
     if "VIDEO" not in formats_used and campaign_goal_eff == "awareness":
         recommendations.append("Dla kampanii awareness wideo jest kluczowe – rozszerz formaty o VIDEO.")
-    if total_impressions > 0 and total_clicks / total_impressions < 0.003:
+    if avg_ctr < 0.003:
         recommendations.append("Niski CTR – rozważ optymalizację kreacji lub przejście na targeting performance.")
     if len(unique_placements) < 5:
         recommendations.append("Mała liczba placementów – rozszerz kryteria (więcej kategorii lub mniejszy min. quality score).")
-    if budget_eff and total_spend < budget_eff * 0.7:
-        recommendations.append(f"Budżet wykorzystany w {round(total_spend/budget_eff*100)}% – rozważ dodanie mid-tier publisherów.")
     if not recommendations:
         recommendations.append("Plan spełnia standardy jakościowe – monitoruj viewability i CTR w trakcie kampanii.")
 
@@ -670,15 +709,18 @@ def create_media_plan(
             "placements_count": len(unique_placements),
             "placements": unique_placements,
             "kpis": {
-                "total_impressions": int(total_impressions),
-                "total_viewable_impressions": int(total_viewable),
-                "total_clicks": int(total_clicks),
-                "total_spend_usd": round(total_spend, 2),
+                "projected_impressions": proj_impressions,
+                "projected_viewable_impressions": proj_viewable,
+                "projected_clicks": proj_clicks,
+                "projected_spend_usd": round(proj_spend, 2),
                 "budget_usd": budget_eff,
-                "budget_utilization_pct": round(total_spend / budget_eff * 100, 1) if budget_eff else None,
+                "budget_utilization_pct": budget_utilization,
                 "avg_viewability_pct": round(avg_viewability * 100, 1),
                 "avg_ctr_pct": round(avg_ctr * 100, 3),
-                "avg_ecpm_usd": round(total_spend / total_impressions * 1000, 4) if total_impressions else 0,
+                "avg_ecpm_usd": round(
+                    sum(float(p.get("ecpm_usd", 0)) for p in unique_placements) / len(unique_placements), 4
+                ) if unique_placements else 0,
+                "inventory_placements": len(unique_placements),
             },
             "format_mix_pct": pct_mix(formats_used),
             "device_mix_pct": pct_mix(devices_used),
