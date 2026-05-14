@@ -1,6 +1,7 @@
 import os
 import glob
 import json
+import re
 from typing import Optional
 import pandas as pd
 from mcp.server.fastmcp import FastMCP
@@ -676,15 +677,24 @@ def get_campaign_insights(
     # --- Build segment filter with progressive widening ---
     seg = df.copy()
     applied_filters: list[str] = []
+    widening_notes: list[str] = []
 
     if iab_cats and "iab_category" in seg.columns:
         iab_lower = [i.lower() for i in iab_cats]
-        filtered = seg[seg["iab_category"].apply(
-            lambda x: any(cat in str(x).lower() for cat in iab_lower)
-        )]
+        # Exact prefix match: "iab2" must be followed by non-digit to avoid
+        # "iab2" matching "iab20", "iab21", etc.
+        def _iab_match(x: str) -> bool:
+            xs = str(x).lower()
+            return any(re.match(rf'^{re.escape(cat)}(\D|$)', xs) for cat in iab_lower)
+        filtered = seg[seg["iab_category"].apply(_iab_match)]
         if len(filtered) >= 10:
             seg = filtered
             applied_filters.append(f"iab={','.join(iab_cats)}")
+        else:
+            widening_notes.append(
+                f"IAB filter ({','.join(iab_cats)}) returned only {len(filtered)} placements "
+                f"(threshold: 10) — widened to all categories."
+            )
 
     if eff_countries:
         country_upper = [c.upper() for c in eff_countries] + ["GLOBAL"]
@@ -694,6 +704,13 @@ def get_campaign_insights(
         if len(filtered) >= 10:
             seg = filtered
             applied_filters.append(f"country={','.join(eff_countries)}")
+        else:
+            in_country = len(filtered)
+            widening_notes.append(
+                f"Country filter ({','.join(eff_countries)}) returned only {in_country} placements "
+                f"(threshold: 10) — showing global {eff_industry or 'all'} inventory instead. "
+                f"Consider refreshing inventory_db or broadening the country list."
+            )
 
     if eff_formats:
         fmt_upper = [f.upper() for f in eff_formats]
@@ -701,6 +718,11 @@ def get_campaign_insights(
         if len(filtered) >= 5:
             seg = filtered
             applied_filters.append(f"format={','.join(fmt_upper)}")
+        else:
+            widening_notes.append(
+                f"Format filter ({','.join(fmt_upper)}) returned only {len(filtered)} placements "
+                f"(threshold: 5) — widened to all formats."
+            )
 
     # --- Compute benchmarks ---
     benchmarks = _compute_segment_benchmarks(seg)
@@ -716,19 +738,24 @@ def get_campaign_insights(
 
     seg = seg.copy()
     seg["_perf_score"] = seg.apply(_perf_score, axis=1)
-    seg_sorted = seg.sort_values("_perf_score", ascending=False)
+    # Deduplicate by domain+app_name: keep best-scoring row per placement identity
+    seg["_place_key"] = seg["domain"].fillna("") + "|" + seg.get("app_name", pd.Series("", index=seg.index)).fillna("")
+    seg_dedup = seg.sort_values("_perf_score", ascending=False).drop_duplicates(subset=["_place_key"])
+    seg_sorted = seg_dedup.sort_values("_perf_score", ascending=False)
 
     top_df = seg_sorted.head(top_n)
+    top_keys = set(top_df["_place_key"])
 
     avoid_mask = (
-        seg["brand_safety_risk"].isin(["medium", "high"])
-        if "brand_safety_risk" in seg.columns
-        else pd.Series(False, index=seg.index)
+        seg_dedup["brand_safety_risk"].isin(["medium", "high"])
+        if "brand_safety_risk" in seg_dedup.columns
+        else pd.Series(False, index=seg_dedup.index)
     )
-    if "quality_score" in seg.columns:
-        q25 = seg["quality_score"].astype(float).quantile(0.25)
-        avoid_mask = avoid_mask | (seg["quality_score"].astype(float) < q25)
-    avoid_df = seg[avoid_mask].sort_values("_perf_score", ascending=True).head(top_n)
+    if "quality_score" in seg_dedup.columns:
+        q25 = seg_dedup["quality_score"].astype(float).quantile(0.25)
+        avoid_mask = avoid_mask | (seg_dedup["quality_score"].astype(float) < q25)
+    # Exclude domains already in top_performers to avoid contradictory signals
+    avoid_df = seg_dedup[avoid_mask & ~seg_dedup["_place_key"].isin(top_keys)].sort_values("_perf_score", ascending=True).head(top_n)
 
     # --- Output columns ---
     output_cols = [
@@ -833,6 +860,7 @@ def get_campaign_insights(
             "formats": eff_formats,
             "campaign_goal": eff_goal,
             "applied_filters": applied_filters,
+            "widening_notes": widening_notes,
             "source_file": inv_filename,
             "placements_analysed": len(seg),
         },
