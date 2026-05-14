@@ -16,5 +16,5 @@ services:
       - key: CLAUDE_MODEL
         value: claude-haiku-4-5-20251001
       - key: HISTORY_FILE
-        value: ""
+        value: campaign_history_db_20260514.csv
     healthCheckPath: /mcp
