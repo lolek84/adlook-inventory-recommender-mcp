@@ -645,7 +645,9 @@ def get_campaign_insights(
     # --- Parse brief if provided ---
     parsed: Optional[dict] = None
     llm_err: Optional[str] = None
-    if client_brief and ANTHROPIC_API_KEY:
+    # Skip LLM brief parsing when all key params are explicitly provided
+    _all_explicit = industry and countries and formats and campaign_goal
+    if client_brief and ANTHROPIC_API_KEY and not _all_explicit:
         parsed, llm_err = _parse_brief_with_llm(client_brief)
 
     (
@@ -728,16 +730,15 @@ def get_campaign_insights(
     benchmarks = _compute_segment_benchmarks(seg)
 
     # --- Score placements: quality × viewability × (1 + cost_efficiency), penalise brand risk ---
-    def _perf_score(row) -> float:
-        qs = float(row.get("quality_score") or 0)
-        vb = float(row.get("viewability") or 0)
-        ce = float(row.get("cost_efficiency_score") or 0)
-        bsr = str(row.get("brand_safety_risk") or "").lower()
-        penalty = 0.6 if bsr == "high" else (0.3 if bsr == "medium" else 0.0)
-        return qs * vb * (1 + ce) * (1 - penalty)
-
+    # Vectorized — avoids slow row-by-row apply()
+    _bsr_penalty = seg["brand_safety_risk"].map({"low": 0.0, "medium": 0.3, "high": 0.6}).fillna(0.0)
     seg = seg.copy()
-    seg["_perf_score"] = seg.apply(_perf_score, axis=1)
+    seg["_perf_score"] = (
+        seg["quality_score"].astype(float).fillna(0.0)
+        * seg["viewability"].astype(float).fillna(0.0)
+        * (1 + seg["cost_efficiency_score"].astype(float).fillna(0.0))
+        * (1 - _bsr_penalty)
+    )
     # Deduplicate by domain+app_name: keep best-scoring row per placement identity
     seg["_place_key"] = seg["domain"].fillna("") + "|" + seg.get("app_name", pd.Series("", index=seg.index)).fillna("")
     seg_dedup = seg.sort_values("_perf_score", ascending=False).drop_duplicates(subset=["_place_key"])
@@ -822,7 +823,13 @@ def get_campaign_insights(
         adv_top: list[dict] = []
         if "advertiser_name" in hist_seg.columns and not hist_seg.empty:
             hist_seg = hist_seg.copy()
-            hist_seg["_perf_score"] = hist_seg.apply(_perf_score, axis=1)
+            _h_bsr_penalty = hist_seg["brand_safety_risk"].map({"low": 0.0, "medium": 0.3, "high": 0.6}).fillna(0.0)
+            hist_seg["_perf_score"] = (
+                hist_seg["quality_score"].astype(float).fillna(0.0)
+                * hist_seg["viewability"].astype(float).fillna(0.0)
+                * (1 + hist_seg["cost_efficiency_score"].astype(float).fillna(0.0))
+                * (1 - _h_bsr_penalty)
+            )
             for adv, grp in hist_seg.groupby("advertiser_name"):
                 hist_out = [c for c in output_cols if c in grp.columns]
                 best = grp.nlargest(3, "_perf_score")[hist_out].fillna("").to_dict(orient="records")
