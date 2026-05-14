@@ -797,7 +797,8 @@ def get_campaign_insights(
             hist_seg = hist_seg.copy()
             hist_seg["_perf_score"] = hist_seg.apply(_perf_score, axis=1)
             for adv, grp in hist_seg.groupby("advertiser_name"):
-                best = grp.nlargest(3, "_perf_score")[output_cols].fillna("").to_dict(orient="records")
+                hist_out = [c for c in output_cols if c in grp.columns]
+                best = grp.nlargest(3, "_perf_score")[hist_out].fillna("").to_dict(orient="records")
                 adv_top.append({
                     "advertiser": adv,
                     "impressions": int(grp["impressions"].sum()),
