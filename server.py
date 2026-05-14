@@ -19,6 +19,7 @@ mcp = FastMCP(
 
 INVENTORY_DIR = os.environ.get("INVENTORY_DIR", ".")
 INVENTORY_FILE = os.environ.get("INVENTORY_FILE", "inventory_db_20260512.csv")
+HISTORY_FILE = os.environ.get("HISTORY_FILE", "")
 
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY")
 CLAUDE_MODEL = os.environ.get("CLAUDE_MODEL", "claude-haiku-4-5-20251001")
@@ -147,28 +148,18 @@ def _pct_str_to_float(val) -> float:
     s = str(val).strip().rstrip("%")
     try:
         v = float(s)
-        return v / 100 if v > 1.5 else v  # already a ratio if <= 1.5
+        return v / 100 if v > 1.5 else v
     except (ValueError, TypeError):
         return 0.0
 
 
-def _load_latest_inventory() -> tuple[pd.DataFrame, str]:
-    path = os.path.join(INVENTORY_DIR, INVENTORY_FILE)
-    if not os.path.isfile(path):
-        pattern = os.path.join(INVENTORY_DIR, "inventory_*.csv")
-        files = sorted(glob.glob(pattern))
-        if not files:
-            raise FileNotFoundError(f"No inventory CSV files found in {INVENTORY_DIR}")
-        raise FileNotFoundError(
-            f"Configured inventory file not found: {INVENTORY_FILE}. "
-            f"Available: {', '.join(os.path.basename(f) for f in files)}"
-        )
+def _normalize_inventory_df(df: pd.DataFrame) -> pd.DataFrame:
+    """Normalize column names, types and derived columns for inventory/history DataFrames."""
+    df = df.copy()
+    df.columns = df.columns.str.strip().str.lstrip("﻿").str.lstrip("﻿")
 
-    df = pd.read_csv(path)
-    df.columns = df.columns.str.strip().str.lstrip("﻿")
-
-    # Normalize uppercase API column names → lowercase server names
     col_rename = {
+        "ADVERTISER_NAME": "advertiser_name",
         "SUPPLY_SOURCE": "supply_source",
         "DOMAIN": "domain",
         "APP_NAME": "app_name",
@@ -192,11 +183,9 @@ def _load_latest_inventory() -> tuple[pd.DataFrame, str]:
     }
     df = df.rename(columns={k: v for k, v in col_rename.items() if k in df.columns})
 
-    # Legacy: country / country_focus
     if "country_focus" not in df.columns and "country" in df.columns:
         df["country_focus"] = df["country"]
 
-    # Convert percentage strings → float ratios (works regardless of dtype)
     for col in ("viewability", "ctr", "video_completion_rate"):
         if col in df.columns:
             df[col] = (
@@ -205,32 +194,27 @@ def _load_latest_inventory() -> tuple[pd.DataFrame, str]:
                 .fillna(0.0)
             )
 
-    # Derive publisher_tier from quality_score if missing
     if "publisher_tier" not in df.columns and "quality_score" in df.columns:
         df["publisher_tier"] = df["quality_score"].apply(
             lambda x: "premium" if float(x or 0) >= 0.80
             else ("mid-tier" if float(x or 0) >= 0.60 else "long-tail")
         )
 
-    # Derive geo_focus
     if "geo_focus" not in df.columns:
         df["geo_focus"] = df.get("country_focus", pd.Series(dtype=str)).apply(
             lambda x: "global" if not x or str(x).upper() in ("GLOBAL", "NAN", "") else "national"
         )
 
-    # Derive is_app
     if "is_app" not in df.columns:
         df["is_app"] = df.get("app_name", pd.Series(dtype=str)).apply(
             lambda x: bool(x and str(x).strip() not in ("", "nan", "None"))
         )
 
-    # Derive language from country
     if "language" not in df.columns and "country_focus" in df.columns:
         df["language"] = df["country_focus"].apply(
             lambda x: _LANG_MAP.get(str(x).upper(), "en")
         )
 
-    # Normalize string columns to lowercase
     for col in ("brand_safety_risk", "publisher_tier", "line_item_type",
                 "device_type", "environment", "content_type",
                 "geo_focus", "country_focus", "iab_category", "iab_category_secondary"):
@@ -240,7 +224,140 @@ def _load_latest_inventory() -> tuple[pd.DataFrame, str]:
     if "audience_profile" in df.columns:
         df["audience_profile"] = df["audience_profile"].astype(str).str.strip().str.lower()
 
-    return df, os.path.basename(path)
+    return df
+
+
+def _load_latest_inventory() -> tuple[pd.DataFrame, str]:
+    path = os.path.join(INVENTORY_DIR, INVENTORY_FILE)
+    if not os.path.isfile(path):
+        pattern = os.path.join(INVENTORY_DIR, "inventory_*.csv")
+        files = sorted(glob.glob(pattern))
+        if not files:
+            raise FileNotFoundError(f"No inventory CSV files found in {INVENTORY_DIR}")
+        raise FileNotFoundError(
+            f"Configured inventory file not found: {INVENTORY_FILE}. "
+            f"Available: {', '.join(os.path.basename(f) for f in files)}"
+        )
+    df = pd.read_csv(path)
+    return _normalize_inventory_df(df), os.path.basename(path)
+
+
+def _load_history_db() -> Optional[tuple[pd.DataFrame, str]]:
+    """Load campaign history DB (per-advertiser placement data) if available."""
+    candidates: list[str] = []
+    if HISTORY_FILE:
+        p = os.path.join(INVENTORY_DIR, HISTORY_FILE)
+        if os.path.isfile(p):
+            candidates = [p]
+    if not candidates:
+        pattern = os.path.join(INVENTORY_DIR, "campaign_history_db_*.csv")
+        candidates = sorted(glob.glob(pattern))
+    if not candidates:
+        return None
+    path = candidates[-1]
+    df = pd.read_csv(path)
+    return _normalize_inventory_df(df), os.path.basename(path)
+
+
+def _compute_segment_benchmarks(df: pd.DataFrame) -> dict:
+    """Return median performance metrics for a (pre-filtered) segment DataFrame."""
+    if df.empty:
+        return {"placements_in_segment": 0}
+
+    def med(col: str) -> float:
+        if col not in df.columns:
+            return 0.0
+        return round(float(df[col].astype(float).median()), 4)
+
+    total = len(df)
+    low_bs = int((df["brand_safety_risk"] == "low").sum()) if "brand_safety_risk" in df.columns else total
+
+    return {
+        "placements_in_segment": total,
+        "pct_low_brand_safety": round(low_bs / total * 100, 1) if total else 0.0,
+        "median_viewability": med("viewability"),
+        "median_vcr": med("video_completion_rate"),
+        "median_ctr": med("ctr"),
+        "median_ecpm_usd": med("ecpm_usd"),
+        "median_quality_score": med("quality_score"),
+        "median_cost_efficiency_score": med("cost_efficiency_score"),
+        "median_brand_safety_score": med("brand_safety_score"),
+    }
+
+
+def _vs_benchmark(val: float, median: float) -> Optional[float]:
+    """Return % deviation of val from median. None if median is 0."""
+    if not median:
+        return None
+    return round((val - median) / median * 100, 1)
+
+
+_INSIGHTS_SYSTEM = (
+    "Jesteś ekspertem media planning w Adlook. Analizujesz dane historyczne inventory "
+    "i piszesz zwięzłe wnioski po polsku dla planera mediów."
+)
+
+
+def _generate_insights_narrative(
+    segment_info: dict,
+    benchmarks: dict,
+    top_performers: list[dict],
+    avoid_list: list[dict],
+) -> str:
+    """Call Claude to generate a Polish-language narrative summarising segment insights."""
+    try:
+        import anthropic
+    except ImportError:
+        return ""
+    if not ANTHROPIC_API_KEY:
+        return ""
+
+    def fmt_pct(v: float) -> str:
+        return f"{v * 100:.1f}%" if v <= 1.0 else f"{v:.1f}%"
+
+    top_lines = "\n".join(
+        f"- {p.get('domain') or p.get('app_name') or 'unknown'}: "
+        f"viewability={fmt_pct(float(p.get('viewability') or 0))}, "
+        f"VCR={fmt_pct(float(p.get('video_completion_rate') or 0))}, "
+        f"quality={float(p.get('quality_score') or 0):.2f}"
+        for p in top_performers[:5]
+    ) or "brak danych"
+
+    avoid_lines = "\n".join(
+        f"- {p.get('domain') or p.get('app_name') or 'unknown'}: "
+        f"brand_safety={p.get('brand_safety_risk')}, "
+        f"viewability={fmt_pct(float(p.get('viewability') or 0))}"
+        for p in avoid_list[:3]
+    ) or "brak ostrzeżeń"
+
+    user_msg = (
+        f"Segment: branża {segment_info.get('industry', 'nieznana')}, "
+        f"kraje {segment_info.get('countries', 'wszystkie')}, "
+        f"format {segment_info.get('formats', 'wszystkie')}.\n\n"
+        f"Benchmarki segmentu ({benchmarks.get('placements_in_segment', 0)} placementów):\n"
+        f"- Mediana viewability: {fmt_pct(benchmarks.get('median_viewability', 0))}\n"
+        f"- Mediana VCR: {fmt_pct(benchmarks.get('median_vcr', 0))}\n"
+        f"- Mediana CTR: {benchmarks.get('median_ctr', 0) * 100:.3f}%\n"
+        f"- Mediana eCPM: ${benchmarks.get('median_ecpm_usd', 0):.2f}\n"
+        f"- Mediana quality score: {benchmarks.get('median_quality_score', 0):.2f}\n"
+        f"- % placementów low brand safety: {benchmarks.get('pct_low_brand_safety', 0):.1f}%\n\n"
+        f"Top placements:\n{top_lines}\n\n"
+        f"Do unikania:\n{avoid_lines}\n\n"
+        "Napisz 3–5 zdań po polsku: co sprawdza się w tym segmencie inventory i czego warto unikać. "
+        "Odwołuj się do konkretnych domen i liczb tam gdzie możliwe."
+    )
+
+    try:
+        client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+        resp = client.messages.create(
+            model=CLAUDE_MODEL,
+            max_tokens=350,
+            system=_INSIGHTS_SYSTEM,
+            messages=[{"role": "user", "content": user_msg}],
+        )
+        return resp.content[0].text.strip()
+    except Exception:
+        return ""
 
 
 def _detect_industry(query: str) -> Optional[str]:
@@ -312,6 +429,10 @@ def _audience_match(row_profile: str, requested: list[str]) -> bool:
     row_profiles = {p.strip() for p in row_profile.split(",")}
     return bool(row_profiles & set(requested))
 
+
+# ---------------------------------------------------------------------------
+# MCP tools
+# ---------------------------------------------------------------------------
 
 @mcp.tool()
 def list_inventory_files() -> dict:
@@ -498,6 +619,237 @@ def parse_client_brief(client_brief: str) -> dict:
 
 
 @mcp.tool()
+def get_campaign_insights(
+    client_brief: str = "",
+    industry: Optional[str] = None,
+    countries: Optional[list[str]] = None,
+    campaign_goal: Optional[str] = None,
+    formats: Optional[list[str]] = None,
+    top_n: int = 10,
+) -> dict:
+    """
+    Return data-driven insights for a campaign type based on historical inventory performance:
+    what placements work, what to avoid, segment benchmarks, and a Polish-language narrative.
+
+    Optionally augmented with per-advertiser patterns if campaign_history_db_*.csv exists.
+
+    Args:
+        client_brief: Free-text campaign description (parsed by Claude when API key is set).
+        industry: Industry keyword (e.g. 'fitness', 'automotive'). Overrides brief.
+        countries: Target country codes (e.g. ['PL']). Overrides brief.
+        campaign_goal: 'awareness' | 'consideration' | 'performance'. Overrides brief.
+        formats: Ad formats to focus on (e.g. ['VIDEO', 'DISPLAY']). Overrides brief.
+        top_n: Number of top performers and underperformers to return. Default 10.
+    """
+    # --- Parse brief if provided ---
+    parsed: Optional[dict] = None
+    llm_err: Optional[str] = None
+    if client_brief and ANTHROPIC_API_KEY:
+        parsed, llm_err = _parse_brief_with_llm(client_brief)
+
+    (
+        eff_industry, eff_goal, _, eff_countries, eff_formats, _eff_devices,
+        _content_types, _audience_profiles, brief_meta,
+    ) = _merge_brief_params(
+        client_brief, None, countries, campaign_goal,
+        formats, None,
+        parsed if not llm_err else None, llm_err,
+    )
+
+    # Explicit params override brief
+    if industry:
+        eff_industry = industry
+    if countries:
+        eff_countries = countries
+    if formats:
+        eff_formats = [f.upper() for f in formats]
+
+    # --- Load inventory ---
+    df, inv_filename = _load_latest_inventory()
+    history_result = _load_history_db()
+
+    # --- Determine IAB categories ---
+    iab_cats: list[str] = []
+    if eff_industry:
+        iab_cats = INDUSTRY_MAP.get(eff_industry.lower(), {}).get("iab", [])
+
+    # --- Build segment filter with progressive widening ---
+    seg = df.copy()
+    applied_filters: list[str] = []
+
+    if iab_cats and "iab_category" in seg.columns:
+        iab_lower = [i.lower() for i in iab_cats]
+        filtered = seg[seg["iab_category"].apply(
+            lambda x: any(cat in str(x).lower() for cat in iab_lower)
+        )]
+        if len(filtered) >= 10:
+            seg = filtered
+            applied_filters.append(f"iab={','.join(iab_cats)}")
+
+    if eff_countries:
+        country_upper = [c.upper() for c in eff_countries] + ["GLOBAL"]
+        filtered = seg[seg["country_focus"].apply(
+            lambda x: any(c in str(x).upper() for c in country_upper)
+        )]
+        if len(filtered) >= 10:
+            seg = filtered
+            applied_filters.append(f"country={','.join(eff_countries)}")
+
+    if eff_formats:
+        fmt_upper = [f.upper() for f in eff_formats]
+        filtered = seg[seg["line_item_type"].str.upper().isin(fmt_upper)]
+        if len(filtered) >= 5:
+            seg = filtered
+            applied_filters.append(f"format={','.join(fmt_upper)}")
+
+    # --- Compute benchmarks ---
+    benchmarks = _compute_segment_benchmarks(seg)
+
+    # --- Score placements: quality × viewability × (1 + cost_efficiency), penalise brand risk ---
+    def _perf_score(row) -> float:
+        qs = float(row.get("quality_score") or 0)
+        vb = float(row.get("viewability") or 0)
+        ce = float(row.get("cost_efficiency_score") or 0)
+        bsr = str(row.get("brand_safety_risk") or "").lower()
+        penalty = 0.6 if bsr == "high" else (0.3 if bsr == "medium" else 0.0)
+        return qs * vb * (1 + ce) * (1 - penalty)
+
+    seg = seg.copy()
+    seg["_perf_score"] = seg.apply(_perf_score, axis=1)
+    seg_sorted = seg.sort_values("_perf_score", ascending=False)
+
+    top_df = seg_sorted.head(top_n)
+
+    avoid_mask = (
+        seg["brand_safety_risk"].isin(["medium", "high"])
+        if "brand_safety_risk" in seg.columns
+        else pd.Series(False, index=seg.index)
+    )
+    if "quality_score" in seg.columns:
+        q25 = seg["quality_score"].astype(float).quantile(0.25)
+        avoid_mask = avoid_mask | (seg["quality_score"].astype(float) < q25)
+    avoid_df = seg[avoid_mask].sort_values("_perf_score", ascending=True).head(top_n)
+
+    # --- Output columns ---
+    output_cols = [
+        "supply_source", "domain", "app_name", "environment", "device_type",
+        "line_item_type", "creative_size", "impressions", "viewability",
+        "video_completion_rate", "ctr", "ecpm_usd", "quality_score",
+        "cost_efficiency_score", "brand_safety_score", "brand_safety_risk",
+        "iab_category", "content_type", "audience_profile", "country_focus",
+        "publisher_tier", "placement_rationale_pl",
+    ]
+    output_cols = [c for c in output_cols if c in seg.columns]
+
+    def _enrich(sub_df: pd.DataFrame) -> list[dict]:
+        records = sub_df[output_cols].fillna("").to_dict(orient="records")
+        for r in records:
+            r["vs_benchmark"] = {
+                "viewability_pct": _vs_benchmark(
+                    float(r.get("viewability") or 0), benchmarks.get("median_viewability", 0)),
+                "vcr_pct": _vs_benchmark(
+                    float(r.get("video_completion_rate") or 0), benchmarks.get("median_vcr", 0)),
+                "quality_score_pct": _vs_benchmark(
+                    float(r.get("quality_score") or 0), benchmarks.get("median_quality_score", 0)),
+                "ecpm_usd_pct": _vs_benchmark(
+                    float(r.get("ecpm_usd") or 0), benchmarks.get("median_ecpm_usd", 0)),
+            }
+        return records
+
+    top_performers = _enrich(top_df)
+    avoid_list = _enrich(avoid_df)
+
+    # --- History DB: per-advertiser patterns (Faza 2) ---
+    history_summary: Optional[dict] = None
+    if history_result is not None:
+        hist_df, hist_filename = history_result
+        hist_seg = hist_df.copy()
+
+        if iab_cats and "iab_category" in hist_seg.columns:
+            iab_lower = [i.lower() for i in iab_cats]
+            filtered_h = hist_seg[hist_seg["iab_category"].apply(
+                lambda x: any(cat in str(x).lower() for cat in iab_lower)
+            )]
+            if len(filtered_h) >= 5:
+                hist_seg = filtered_h
+
+        if eff_countries and "country_focus" in hist_seg.columns:
+            country_upper = [c.upper() for c in eff_countries] + ["GLOBAL"]
+            filtered_h = hist_seg[hist_seg["country_focus"].apply(
+                lambda x: any(c in str(x).upper() for c in country_upper)
+            )]
+            if len(filtered_h) >= 5:
+                hist_seg = filtered_h
+
+        advertiser_count = 0
+        top_advertisers: dict = {}
+        if "advertiser_name" in hist_seg.columns and not hist_seg.empty:
+            advertiser_count = int(hist_seg["advertiser_name"].nunique())
+            top_advertisers = {
+                str(k): int(v)
+                for k, v in hist_seg.groupby("advertiser_name")["impressions"]
+                .sum().nlargest(5).items()
+            }
+
+        # Top-performing placements per advertiser
+        adv_top: list[dict] = []
+        if "advertiser_name" in hist_seg.columns and not hist_seg.empty:
+            hist_seg = hist_seg.copy()
+            hist_seg["_perf_score"] = hist_seg.apply(_perf_score, axis=1)
+            for adv, grp in hist_seg.groupby("advertiser_name"):
+                best = grp.nlargest(3, "_perf_score")[output_cols].fillna("").to_dict(orient="records")
+                adv_top.append({
+                    "advertiser": adv,
+                    "impressions": int(grp["impressions"].sum()),
+                    "avg_viewability": round(float(grp["viewability"].mean()), 4),
+                    "avg_quality_score": round(float(grp["quality_score"].mean()), 4),
+                    "top_placements": best,
+                })
+            adv_top.sort(key=lambda x: x["impressions"], reverse=True)
+
+        history_summary = {
+            "history_file": hist_filename,
+            "placements_in_segment": len(hist_seg),
+            "advertisers_in_segment": advertiser_count,
+            "top_advertisers_by_impressions": top_advertisers,
+            "benchmarks": _compute_segment_benchmarks(hist_seg),
+            "advertiser_details": adv_top[:10],
+        }
+
+    # --- LLM narrative ---
+    segment_info = {
+        "industry": eff_industry or "nieznana",
+        "countries": ",".join(eff_countries) if eff_countries else "wszystkie",
+        "formats": ",".join(eff_formats) if eff_formats else "wszystkie",
+    }
+    narrative = _generate_insights_narrative(segment_info, benchmarks, top_performers, avoid_list)
+
+    return {
+        "segment": {
+            "industry": eff_industry,
+            "iab_categories": iab_cats,
+            "countries": eff_countries,
+            "formats": eff_formats,
+            "campaign_goal": eff_goal,
+            "applied_filters": applied_filters,
+            "source_file": inv_filename,
+            "placements_analysed": len(seg),
+        },
+        "benchmark": benchmarks,
+        "top_performers": top_performers,
+        "avoid_list": avoid_list,
+        "insights_pl": narrative,
+        "brief_parsing": {
+            "llm_used": brief_meta.get("llm_used"),
+            "confidence": brief_meta.get("confidence"),
+            "brief_summary_pl": brief_meta.get("brief_summary_pl"),
+            "llm_error": brief_meta.get("llm_error"),
+        },
+        "history": history_summary,
+    }
+
+
+@mcp.tool()
 def create_media_plan(
     client_brief: str,
     budget_usd: Optional[float] = None,
@@ -626,7 +978,6 @@ def create_media_plan(
             seen.add(key)
             unique_placements.append(p)
 
-    # Inventory totals (historical baseline)
     inv_impressions = sum(float(p.get("impressions", 0)) for p in unique_placements)
     inv_viewable = sum(float(p.get("viewable_impressions", 0)) for p in unique_placements)
     inv_clicks = sum(float(p.get("clicks", 0)) for p in unique_placements)
@@ -640,8 +991,6 @@ def create_media_plan(
         if unique_placements else 0
     )
 
-    # Budget allocation: distribute budget proportionally by impression share,
-    # then project impressions at that allocated spend using each placement's eCPM.
     if budget_eff and inv_impressions > 0:
         for p in unique_placements:
             share = float(p.get("impressions", 0)) / inv_impressions
