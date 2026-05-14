@@ -13,6 +13,7 @@ mcp = FastMCP(
     "adlook-inventory-recommender",
     host="0.0.0.0",
     port=_port,
+    stateless_http=True,
     transport_security=TransportSecuritySettings(
         enable_dns_rebinding_protection=False,
     ),
