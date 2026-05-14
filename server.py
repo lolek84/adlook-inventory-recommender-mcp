@@ -341,7 +341,7 @@ def _generate_insights_narrative(
         f"- Mediana CTR: {benchmarks.get('median_ctr', 0) * 100:.3f}%\n"
         f"- Mediana eCPM: ${benchmarks.get('median_ecpm_usd', 0):.2f}\n"
         f"- Mediana quality score: {benchmarks.get('median_quality_score', 0):.2f}\n"
-        f"- % placementów low brand safety: {benchmarks.get('pct_low_brand_safety', 0):.1f}%\n\n"
+        f"- % placementów bezpiecznych (brand safety = low risk): {benchmarks.get('pct_low_brand_safety', 0):.1f}%\n\n"
         f"Top placements:\n{top_lines}\n\n"
         f"Do unikania:\n{avoid_lines}\n\n"
         "Napisz 3–5 zdań po polsku: co sprawdza się w tym segmencie inventory i czego warto unikać. "
@@ -769,9 +769,21 @@ def get_campaign_insights(
     ]
     output_cols = [c for c in output_cols if c in seg.columns]
 
+    med_viewability = benchmarks.get("median_viewability", 0)
+    med_quality = benchmarks.get("median_quality_score", 0)
+
     def _enrich(sub_df: pd.DataFrame) -> list[dict]:
         records = sub_df[output_cols].fillna("").to_dict(orient="records")
         for r in records:
+            warnings = []
+            vb = float(r.get("viewability") or 0)
+            qs = float(r.get("quality_score") or 0)
+            if med_viewability > 0 and vb < med_viewability * 0.85:
+                warnings.append(f"viewability {vb:.1%} is >15% below segment median {med_viewability:.1%}")
+            if qs < 0.70:
+                warnings.append(f"quality_score {qs:.3f} below recommended threshold 0.70")
+            if warnings:
+                r["warnings"] = warnings
             r["vs_benchmark"] = {
                 "viewability_pct": _vs_benchmark(
                     float(r.get("viewability") or 0), benchmarks.get("median_viewability", 0)),
