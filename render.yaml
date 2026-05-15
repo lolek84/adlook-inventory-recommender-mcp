@@ -10,7 +10,7 @@ services:
       - key: INVENTORY_DIR
         value: .
       - key: INVENTORY_FILE
-        value: inventory_db_20260512.csv
+        value: inventory_db_20260515.csv
       - key: ANTHROPIC_API_KEY
         sync: false
       - key: CLAUDE_MODEL

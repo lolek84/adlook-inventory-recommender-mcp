@@ -20,7 +20,7 @@ mcp = FastMCP(
 )
 
 INVENTORY_DIR = os.environ.get("INVENTORY_DIR", ".")
-INVENTORY_FILE = os.environ.get("INVENTORY_FILE", "inventory_db_20260512.csv")
+INVENTORY_FILE = os.environ.get("INVENTORY_FILE", "inventory_db_20260515.csv")
 HISTORY_FILE = os.environ.get("HISTORY_FILE", "")
 
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY")
