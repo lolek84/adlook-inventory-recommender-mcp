@@ -191,7 +191,11 @@ Where viewability and quality_score are 0–1 (if quality_score returns 0–100,
 ````markdown
 # Media Plan: [client / campaign name]
 
+> **[Strategic thesis — one sentence, 15–25 words, specific to this brand and brief. Written LAST, after all phases are complete. Format: "[Client]'s [specific gap from Phase 0] makes [campaign type] the right move now — this plan delivers it in [N] placements across [markets], backed by [data source]." Example: "With display driving only 0.8% of [client]'s traffic vs 14% paid search in PL, this awareness plan targets the exact gap with 12 premium placements verified against category benchmarks." Replace this instruction line entirely with the actual thesis.]**
+
 > **PLAN AT A GLANCE**
+>
+> **Our pick: Variant [A/B]** — [one sentence: the single strongest reason, grounded in one specific Phase 0 or Phase 3 data point. Must match Section 8's closing line exactly.]
 >
 > | | Variant A — Best Outcome | Variant B — Best Value |
 > |---|---|---|
@@ -202,8 +206,7 @@ Where viewability and quality_score are 0–1 (if quality_score returns 0–100,
 > | Impressions / 1k USD | [X] | [X] |
 > | Brand safety floor | low only | low + medium |
 > | Inventory tier | premium | premium + mid-tier |
->
-> **Our pick: Variant [A/B]** — [one sentence: the single strongest reason for the pick, grounded in Phase 0 or Phase 3 data].
+> | Campaign flight | [start – end or "to be confirmed"] | same |
 
 ---
 
@@ -243,6 +246,15 @@ In prose:
 
 If Similarweb returned no data (small brand / fresh domain) — write it explicitly: *"The brand has limited digital history tracked by Similarweb; we lean more heavily on the brief and category benchmarks."*
 
+**Mandatory closing: "Our read" — 3 bullets synthesizing the key diagnostic conclusions from this section.**
+
+> **Our read:**
+> - ✓ **Confirmed:** [one thing Similarweb data confirmed that the brief already stated — proof you checked the brief against reality]
+> - ⚡ **Unexpected:** [one thing Similarweb revealed that the brief did NOT mention — audience segment mismatch, a competitor the client didn't name, a channel gap they didn't flag. If everything aligned with the brief, write "No material surprises — brief and Similarweb data aligned on audience and competitive set" but this is the exception, not the default]
+> - → **Implication for the plan:** [one direct consequence for placement selection, targeting, or format choice in sections 6A/6B]
+
+These three bullets are the reason section 3 exists. Without them, it is a data dump, not a diagnosis. The "Unexpected" bullet is what the client remembers from this plan in their internal meeting.
+
 ## 4. What worked historically in analogous setups (Phase 3 — insights, **anonymized**)
 Result from `get_campaign_insights`, **with no brand or advertiser names**. Use the formula *"a client in industry X with setup Y achieved Z"*.
 
@@ -276,6 +288,8 @@ Briefly state:
 
 ## 6A. Placement selection — Variant A: Best Outcome
 
+**Open with a 2–3 sentence variant narrative before the table.** Not a description of the filters — a positioning statement for this variant. What is it designed to do, who is it for, and what is the single strongest argument for choosing it over B. Example: *"Variant A concentrates the full budget on premium inventory where viewability has been independently verified above 70% in analogous campaigns. Every placement here has passed the brand-safety-low threshold and a quality score above 0.85 — the standard we would set for a brand-lift measurement commitment. This is the variant to activate when the brief outcome needs to be defensible to a CMO."*
+
 Table. **Only placements returned by MCP** — no fabricated domains.
 
 | # | Placement / Source | Country | Format | Device | Audience | Viewability | eCPM (USD) | Quality | Allocated budget | Rationale |
@@ -291,6 +305,8 @@ Examples of the standard:
 Placements with no direct Phase 0 or Phase 3 tie must still justify existence via Phase 1 inventory depth or a concrete content-match argument. "Good fit" without a data anchor is a rejected rationale.
 
 ## 6B. Placement selection — Variant B: Best Value
+
+**Open with a 2–3 sentence variant narrative before the table.** Frame this as a deliberate strategic choice, not a compromise. What does B do better than A — and at what explicit trade-off. Example: *"Variant B opens the inventory tier to premium and mid-tier placements, extending reach by approximately [N]× for the same budget. The quality floor is set at 0.70 (vs 0.85 in A) — still in the top half of the pool — and the brand safety threshold allows medium-risk placements where editorial context is safe but classification is mixed. This is the variant for briefs where reach and frequency matter more than a guaranteed viewability floor, or where a test-and-learn approach is appropriate before committing to premium."*
 
 Table as in 6A, **plus a `Value Score` column** = (viewability × quality_score) / eCPM. Sort descending by Value Score.
 
@@ -334,16 +350,19 @@ If a number is missing from MCP — mark it "to be confirmed in setup," do not f
 
 ## 8. Variant comparison — which to pick
 
-3–5 sentences of prose. **No "it depends on your priorities."** The plan has an opinion.
+Structure as explicit scenario labels — this makes the content shareable internally without re-explaining it:
 
-State specifically when A is the right call and when B is the right call — in terms of the *client's concrete situation* from Phase 0 and Phase 3, not generic rules. Example frame: *"Variant A is the right answer if [specific condition from their business — e.g. 'your Q3 brand lift measurement requires ≥70% viewability to reach statistical significance']; Variant B is the right answer if [different specific condition — e.g. 'reach and frequency against the 25–44 male segment is the priority and the viewability floor is 60%+']."*
+> **Scenario A — when to activate Variant A:** [one specific condition rooted in the client's actual brief or Phase 0 data, not generic. E.g.: "If the Q3 brief requires a viewability floor of ≥70% for an IAS third-party audit, Variant A is the only safe choice — Variant B's mid-tier placements will not reliably clear that bar."]
 
-Hybrid (only if genuinely fit — do not add by default): if a budget split between A and B is legitimately the best answer, explain the split ratio, why it's not just a compromise but a deliberate strategy, and who in the client's team each portion is designed for.
+> **Scenario B — when to activate Variant B:** [one specific condition, with a concrete number. E.g.: "If the primary KPI is unique reach against the 25–44 male segment and the viewability floor of 60% is acceptable, Variant B delivers 2.3× more impressions for the same 50k USD — the efficiency argument wins."]
 
-**Mandatory closing line — the last sentence of this section, in bold:**
-> **Our recommendation: Variant [A / B / hybrid at X%/Y%]** — [one sentence grounding the pick in one specific data point from Phase 0 or Phase 3, e.g. "Variant A, because Similarweb shows [client]'s audience is concentrated in premium news and finance contexts where Variant A's placements have a documented 74% viewability benchmark."]
+> **Hybrid scenario** (include only if genuinely justified by the data): [if applicable — split ratio + who benefits from each portion. E.g.: "70% A / 30% B makes sense if the campaign has a dual mandate: brand-safe premium launch in PL (A) and exploratory reach in HU/RO where there is no established baseline (B). Not a compromise — a deliberate geo split."] If the data does not support a hybrid, omit this block entirely.
 
-This line must appear. It is the deliverable the plan builds toward. It is what the client prints and puts on the table in their internal meeting.
+**Mandatory last line of this section:**
+
+> **Our recommendation: Variant [A / B / hybrid at X%/Y%]** — [one sentence: the single deciding factor, tied to one specific data point from Phase 0 or Phase 3. This must match the "Our pick" line in the Plan at a Glance box exactly — same variant, same reason.]
+
+This line is what the client puts on their internal meeting agenda. It must be specific enough that a decision-maker who has not read the rest of the plan still understands why the pick is the pick.
 
 ## 9. Inventory limitations and risks
 
