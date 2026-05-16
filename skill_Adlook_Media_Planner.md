@@ -39,6 +39,69 @@ These apply to every section of the output — they are what separates a plan th
 
 **Always Markdown in chat.** Do not create .xlsx/.docx files unless the user (Karol) explicitly asks. No preamble, no "here is your plan" — go straight into the Plan at a Glance box.
 
+## Visual elements — charts and graphs
+
+**People buy with their eyes.** A plan with data but no visuals loses to a visually clear competitor proposal. Every chart in this plan must be **generated from real tool data** — no fabricated numbers, no decorative placeholders.
+
+**Chart format rules:**
+- Use **Mermaid** for proper charts (pie, bar, gantt). Claude Desktop and most Markdown renderers support it.
+- Use **Unicode progress bars** (`█░`) as fallback or for quick inline comparisons where Mermaid is overkill.
+- Never generate a chart with placeholder values — if you don't have the number yet, generate the chart after the phase that produces it.
+- Every chart gets a **title that states the conclusion**, not the subject. "Display accounts for only 0.8% of traffic — the gap this plan closes" beats "Traffic channel split."
+
+**Mandatory charts in the plan (generate all of these):**
+
+1. **Section 3 — Channel gap chart.** After the Similarweb table, generate a horizontal bar chart showing the client's traffic channel split. Highlight the display bar — it is visually the shortest, and that is the point. Use `xychart-beta` in Mermaid with horizontal orientation, or Unicode bars if simpler. Title must name the gap.
+
+2. **Section 6A — Budget allocation.** After the placement table, generate a `pie` chart showing how the budget is distributed across placements (or markets if multi-geo). Label each slice with the placement/geo name and % of budget. This makes "where the money goes" immediately scannable.
+
+3. **Section 6B — Value Score ranking.** After the placement table, generate a horizontal bar chart of all placements sorted by Value Score descending. This makes "best value" visual — the client sees the ranking at a glance instead of reading columns. Use Unicode `█` bars scaled to the highest Value Score = full bar.
+
+4. **Section 7 — A vs B KPI comparison.** After the KPI table, generate a side-by-side visual comparing the two variants on 3 key KPIs: total impressions, avg viewability, and avg eCPM. Use `xychart-beta` or a 3-row Unicode comparison block. The goal: the client sees which variant "wins" on each axis without reading the table.
+
+5. **Section 5 (optional) — Funnel position.** If the campaign has a clear funnel role (awareness / consideration / performance), add a simple text funnel diagram using `graph TD` Mermaid or Unicode arrows showing where this campaign sits and what it feeds into.
+
+**Chart templates (adapt with real data):**
+
+```mermaid
+%% Section 3 — Channel gap (adapt channel names and values from Similarweb)
+xychart-beta horizontal
+    title "Display accounts for X% of traffic — the gap this plan closes"
+    x-axis 0 --> 50
+    y-axis ["Direct", "Organic Search", "Paid Search", "Social", "Display ⬅"]
+    bar [41, 28, 14, 12, 0.8]
+```
+
+```mermaid
+%% Section 6A — Budget allocation (adapt slices from placement table)
+pie title "Variant A — Budget allocation by placement"
+    "premium-news-PL" : 35
+    "sports-HU" : 25
+    "finance-DE" : 20
+    "lifestyle-GB" : 20
+```
+
+```
+%% Section 6B — Value Score ranking (Unicode bars, adapt from table)
+Value Score ranking — Variant B placements
+
+sports-PL          ████████████████████ 0.49
+lifestyle-HU       ███████████████░░░░░ 0.38
+tech-DE            ████████████░░░░░░░░ 0.31
+news-BR            ████████░░░░░░░░░░░░ 0.22
+longtail-US        █████░░░░░░░░░░░░░░░ 0.14
+```
+
+```mermaid
+%% Section 7 — A vs B KPI comparison (adapt values from section 7 table)
+xychart-beta
+    title "Variant A vs B — the trade-off at a glance"
+    x-axis ["Avg viewability (%)", "Quality score (×100)", "Impr / 1k USD"]
+    y-axis "Score" 0 --> 120
+    bar [73, 87, 45]
+    bar [62, 71, 103]
+```
+
 ---
 
 ## Mandatory 5-phase flow
@@ -255,6 +318,8 @@ If Similarweb returned no data (small brand / fresh domain) — write it explici
 
 These three bullets are the reason section 3 exists. Without them, it is a data dump, not a diagnosis. The "Unexpected" bullet is what the client remembers from this plan in their internal meeting.
 
+**📊 Channel gap chart — generate immediately after "Our read".** Use the `xychart-beta horizontal` Mermaid template from the "Visual elements" section above. Real values from `get-websites-traffic-channels`. Title must name the gap explicitly (e.g. *"Display = 0.8% of traffic — the gap this plan addresses"*). If Similarweb returned no data, skip this chart and note why.
+
 ## 4. What worked historically in analogous setups (Phase 3 — insights, **anonymized**)
 Result from `get_campaign_insights`, **with no brand or advertiser names**. Use the formula *"a client in industry X with setup Y achieved Z"*.
 
@@ -304,6 +369,8 @@ Examples of the standard:
 
 Placements with no direct Phase 0 or Phase 3 tie must still justify existence via Phase 1 inventory depth or a concrete content-match argument. "Good fit" without a data anchor is a rejected rationale.
 
+**📊 Budget allocation chart — generate after the table.** Pie chart (`pie` Mermaid) showing each placement's share of Variant A budget. Label slices with placement name + country + %. Use real allocated_budget values from the table above.
+
 ## 6B. Placement selection — Variant B: Best Value
 
 **Open with a 2–3 sentence variant narrative before the table.** Frame this as a deliberate strategic choice, not a compromise. What does B do better than A — and at what explicit trade-off. Example: *"Variant B opens the inventory tier to premium and mid-tier placements, extending reach by approximately [N]× for the same budget. The quality floor is set at 0.70 (vs 0.85 in A) — still in the top half of the pool — and the brand safety threshold allows medium-risk placements where editorial context is safe but classification is mixed. This is the variant for briefs where reach and frequency matter more than a guaranteed viewability floor, or where a test-and-learn approach is appropriate before committing to premium."*
@@ -320,6 +387,21 @@ Examples of the standard:
 - *"Long-tail lifestyle HU — eCPM 0.80 USD vs pool avg 2.18 USD; quality_score 0.71 clears the minimum threshold; reach 3.2× wider for the same allocation."*
 - *"Mid-tier tech vertical BR — analogous category client achieved 66% viewability at 0.95 eCPM in this environment (Phase 3, anonymized); included here as the highest Value Score BR placement in the pool."*
 
+**📊 Value Score ranking chart — generate after the table.** Horizontal Unicode bar chart of all placements sorted by Value Score descending (table is already sorted this way). Scale: highest Value Score = 20 full blocks (`█`), rest proportional. Add the numeric value next to each bar. This is the visual that makes "best value" immediately obvious — the client sees the ranking without reading the columns.
+
+Example format (adapt with real placement names and scores):
+```
+Value Score ranking — Variant B
+─────────────────────────────────────────
+sports-PL          ████████████████████ 0.49
+lifestyle-HU       ███████████████░░░░░ 0.38
+tech-DE            ████████████░░░░░░░░ 0.31
+news-BR            ████████░░░░░░░░░░░░ 0.22
+longtail-US        █████░░░░░░░░░░░░░░░ 0.14
+─────────────────────────────────────────
+Higher = more quality impressions per dollar
+```
+
 ## 7. KPI projections — variant comparison
 
 | KPI | Variant A (Best Outcome) | Variant B (Best Value) | Confidence | Source |
@@ -334,7 +416,19 @@ Examples of the standard:
 
 Confidence legend: ✓ verified = based on real placement historical data; ~ estimated = model projection or category benchmark; ⚠ thin pool = fewer than 3 analogous data points, flag to client.
 
-**Below the table, a "How we computed this" subsection:**
+**📊 A vs B comparison chart — generate immediately after the table, before "How we computed this".** This is the most important visual in the plan — the client will screenshot this for their internal deck. Use `xychart-beta` Mermaid with real values from the table. Show 3 axes: Avg viewability (%), Avg quality score (×100 for scale), and Impressions per 1k USD. Two bar groups: Variant A and Variant B. Title: "What you get in each variant — the trade-off visualized."
+
+```mermaid
+xychart-beta
+    title "What you get in each variant — the trade-off visualized"
+    x-axis ["Avg viewability (%)", "Quality score (×100)", "Impr / 1k USD (÷10)"]
+    y-axis "Score" 0 --> 120
+    bar [A_viewability, A_quality×100, A_impr_per_k÷10]
+    bar [B_viewability, B_quality×100, B_impr_per_k÷10]
+```
+*(Replace the bracketed values with real numbers from the table above. Divide Impressions/1k USD by 10 to keep it on the same visual scale as viewability %.)*
+
+**Below the chart, a "How we computed this" subsection:**
 In plain English, explicitly list:
 - **Total impressions — sanity check (mandatory).** `create_media_plan` returns `projected_impressions` as an extrapolation from each placement's eCPM, with no ceiling on real pool availability. In practice for small placements this produces pathologically high numbers (we have seen a 50× gap vs the placement's real historical `impressions`). Therefore:
   1. From `create_media_plan` you note `projected_impressions` as the upper bound.
