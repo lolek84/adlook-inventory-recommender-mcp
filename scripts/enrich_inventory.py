@@ -19,7 +19,7 @@ import math
 import urllib.request
 from datetime import date
 
-INPUT_FILE = f"inventory_db_{date.today().strftime('%Y%m%d')}.csv"
+INPUT_FILE = "inventory_db_20260515.csv"
 OUTPUT_FILE = INPUT_FILE  # overwrite in place
 
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
