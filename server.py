@@ -907,6 +907,8 @@ def create_media_plan(
     preferred_formats: Optional[list[str]] = None,
     preferred_devices: Optional[list[str]] = None,
     min_viewability: float = 0.70,
+    publisher_tiers: Optional[list[str]] = None,
+    max_brand_safety_risk: str = "low",
 ) -> dict:
     """
     Generate a complete media plan from a natural-language client brief.
@@ -922,6 +924,9 @@ def create_media_plan(
         preferred_formats: Override format selection (e.g. ['VIDEO']).
         preferred_devices: Override device selection (e.g. ['Mobile']).
         min_viewability: Minimum viewability threshold. Default 0.70.
+        publisher_tiers: Allowed publisher tiers (e.g. ['premium', 'mid-tier', 'long-tail']).
+            Default: ['premium', 'mid-tier']. Use ['premium'] for brand-safe only.
+        max_brand_safety_risk: 'low' or 'medium'. Default 'low'.
 
     Returns:
         Structured media plan with selected placements, KPI projections,
@@ -973,6 +978,12 @@ def create_media_plan(
     else:
         prem_limit, mid_limit = 40, 40
 
+    # Resolve publisher tiers: split caller-supplied list into premium vs mid-tier buckets,
+    # or default to both tiers when not specified.
+    _all_tiers = publisher_tiers or ["premium", "mid-tier"]
+    _prem_tiers = [t for t in _all_tiers if t == "premium"] or (["premium"] if "premium" in _all_tiers else _all_tiers)
+    _mid_tiers  = [t for t in _all_tiers if t != "premium"] or ["mid-tier"]
+
     premium_result = find_placements(
         industry=industry,
         content_types=content_types,
@@ -982,8 +993,8 @@ def create_media_plan(
         countries=countries_eff,
         min_viewability=min_viewability,
         min_quality_score=0.85,
-        max_brand_safety_risk="low",
-        publisher_tiers=["premium"],
+        max_brand_safety_risk=max_brand_safety_risk,
+        publisher_tiers=_prem_tiers,
         limit=prem_limit,
     )
 
@@ -999,8 +1010,8 @@ def create_media_plan(
             countries=countries_eff,
             min_viewability=min_viewability,
             min_quality_score=0.85,
-            max_brand_safety_risk="low",
-            publisher_tiers=["premium"],
+            max_brand_safety_risk=max_brand_safety_risk,
+            publisher_tiers=_prem_tiers,
             limit=prem_limit,
         )
 
@@ -1013,8 +1024,8 @@ def create_media_plan(
         countries=countries_eff,
         min_viewability=min_viewability - 0.05,
         min_quality_score=0.80,
-        max_brand_safety_risk="low",
-        publisher_tiers=["mid-tier"],
+        max_brand_safety_risk=max_brand_safety_risk,
+        publisher_tiers=_mid_tiers,
         limit=mid_limit,
     )
 
