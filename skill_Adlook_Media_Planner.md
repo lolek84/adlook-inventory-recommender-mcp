@@ -57,7 +57,7 @@ These apply to every section of the output — they are what separates a plan th
 
 3. **Section 6B — Value Score ranking.** After the placement table, generate a horizontal bar chart of all placements sorted by Value Score descending. This makes "best value" visual — the client sees the ranking at a glance instead of reading columns. Use Unicode `█` bars scaled to the highest Value Score = full bar.
 
-4. **Section 7 — A vs B KPI comparison.** After the KPI table, generate a side-by-side visual comparing the two variants on 3 key KPIs: total impressions, avg viewability, and avg eCPM. Use `xychart-beta` or a 3-row Unicode comparison block. The goal: the client sees which variant "wins" on each axis without reading the table.
+4. **Section 7 — A vs B KPI comparison.** After the KPI table, generate a side-by-side Unicode bar comparison (3 rows: viewability, quality score, impressions/1k USD). Scale each metric independently. Mark which variant wins each row with `← A wins` / `← B wins`. Do NOT use xychart — it renders both bars the same color with no legend, making A vs B impossible to distinguish.
 
 5. **Section 5 — Funnel position diagram (mandatory).** Every plan must show where this campaign sits in the funnel and what it feeds into. Use `graph TD` Mermaid with 3 nodes: AWARENESS / CONSIDERATION / PERFORMANCE. Style the node that this campaign activates in blue; others in grey (future or existing). This chart communicates the strategic role of the plan at a glance without any text.
 
@@ -96,15 +96,17 @@ Higher = more quality impressions per dollar
 ```
 *Section 6B template — Unicode bars, no Mermaid needed. Scale: top score = 20 blocks.*
 
-```mermaid
-xychart-beta
-    title "Variant A vs B — the trade-off at a glance"
-    x-axis ["Viewability %", "Quality x100", "Impr per 1k USD"]
-    y-axis "Score" 0 --> 120
-    bar [73, 87, 45]
-    bar [62, 71, 103]
 ```
-*Section 7 template — adapt values from the KPI table. Divide Impressions/1k USD by 10 to keep scale comparable to viewability %.*
+A vs B — the trade-off at a glance
+─────────────────────────────────────────────────────────
+                   Variant A (Best Outcome)  Variant B (Best Value)
+Viewability        ████████████████████ 73%  ████████████████░░░░ 62%  ← A wins
+Quality score      █████████████████░░░ 87   ██████████████░░░░░░ 71   ← A wins
+Impr / 1k USD      █████████░░░░░░░░░░░ 450  ████████████████░░░░ 1030  ← B wins
+─────────────────────────────────────────────────────────
+A: higher viewability · B: more impressions per dollar
+```
+*Section 7 template — Unicode bars, no Mermaid. Scale each metric independently (top value = 20 blocks). Show which variant wins each row with ← A wins / ← B wins. One summary line below. Replace example values with real numbers from the KPI table.*
 
 ```mermaid
 graph TD
@@ -529,17 +531,7 @@ Higher = more quality impressions per dollar
 
 Confidence legend: ✓ verified = based on real placement historical data; ~ estimated = model projection or category benchmark; ⚠ thin pool = fewer than 3 analogous data points, flag to client.
 
-**📊 A vs B comparison chart — generate immediately after the table, before "How we computed this".** This is the most important visual in the plan — the client will screenshot this for their internal deck. Use `xychart-beta` Mermaid with real values from the table. Show 3 axes: Avg viewability (%), Avg quality score (×100 for scale), and Impressions per 1k USD. Two bar groups: Variant A and Variant B. Title: "What you get in each variant — the trade-off visualized."
-
-```mermaid
-xychart-beta
-    title "What you get in each variant — the trade-off visualized"
-    x-axis ["Viewability %", "Quality x100", "Impr per 1k / 10"]
-    y-axis "Score" 0 --> 120
-    bar [78, 85, 92]
-    bar [64, 71, 160]
-```
-*(Replace the example values with real numbers from the table above: viewability %, quality score x100, and impressions per 1k USD divided by 10. Two bars: Variant A then Variant B.)*
+**📊 A vs B comparison — generate immediately after the table, before "How we computed this".** This is the most important visual in the plan — the client will screenshot this for their internal deck. Use the **Unicode bar format** from the "Visual elements" section above (not xychart — xychart renders both variants in the same color with no legend, making the comparison unreadable). Show 3 metrics: Avg viewability (%), Avg quality score, Impressions per 1k USD. Scale each metric independently (top value = 20 blocks). Mark which variant wins each row. Real values from the table — no placeholders.
 
 **Below the chart, a "How we computed this" subsection:**
 In plain English, explicitly list:
