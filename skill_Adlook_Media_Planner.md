@@ -370,7 +370,14 @@ Then: 3–4 sentences covering what you offer (two variants A/B), with headline 
 
 In prose:
 - **Funnel-position diagnosis:** what the traffic mix tells us. If display share is <2% and the budget is for awareness — that's an unambiguous gap this plan closes.
-- **Target/brief alignment:** Similarweb demographics vs the brief's declared target. Either "aligned" or "mismatch — we propose broader targeting 25–54 instead of 18–34 because that's where the audience actually is."
+- **Target/brief alignment:** Similarweb demographics vs the brief's declared target. Immediately after the prose, generate a visual alignment check using blockquote format (real values from `get-websites-demographics-agg`):
+
+> **Audience alignment — [client] / [market]**
+> Brief target (declared): [age range / gender from brief]
+> Real visitors (Similarweb): [top age band + gender split from demographics-agg]
+> Verdict: ✅ ALIGNED — targeting proceeds on brief parameters / ⚠ MISMATCH → [one-line consequence for 6A/6B, e.g. "broadening to 25–54 — this is where the budget will perform"]
+
+The verdict line is what the client's media team quotes internally. Never skip it — "aligned" (confirmation the brief is grounded in data) is as valuable as "mismatch" (an unexpected finding).
 - **Competitive landscape:** who competes for the same attention in digital (from `keywords-competitors`). This sets up section 4.
 
 If Similarweb returned no data (small brand / fresh domain) — write it explicitly: *"The brand has limited digital history tracked by Similarweb; we lean more heavily on the brief and category benchmarks."*
@@ -603,7 +610,16 @@ Karol must read this section and be able to walk into a client call knowing wher
 
 Required bullets:
 - **Client decision** (owner: client, by [suggest a reasonable deadline e.g. end of week]): Variant A / B / hybrid — confirm selection so setup can begin.
-- **Creative requirements** (owner: client): list the exact specs needed — format (display/video), dimensions (e.g. 970×250, 300×600, VAST 3.0), max file size, click-through URL, click tag, viewability vendor pixel (IAS/MOAT/DoubleVerify) if applicable. Do not leave this generic — pull the format from Phases 1 and 4.
+- **Creative requirements** (owner: client): after a one-line prose note, format the specs as a visual card using a monospaced code block — this is what the client forwards directly to their creative agency without reformatting. Pull every spec from Phases 1 and 4; do not leave any field generic:
+  ```
+  Creative specifications — [campaign name]
+    Format       [display / video / rich media]
+    Size(s)      [e.g. 970×250 · 300×600 · 300×250]
+    Max weight   [e.g. 200kb display / 30s VAST 3.0 video]
+    Click tag    required — Adlook provides redirect URL at setup
+    3rd party    [IAS / MOAT / DoubleVerify pixel — if measurement required]
+    Deadline     [date from Gantt timeline above]
+  ```
 - **Setup timeline** (owner: Adlook): *"Line items can be activated within [N] business days of creative receipt."* Estimate based on the format mix in the plan — standard display is typically 1–2 days, PMP/deal-ID requires 3–5.
 - **Inventory timing note** (owner: Adlook, conditional): if Phase 1 or Phase 4 revealed a thin pool in any placement (fewer than 3× the campaign volume in available historical impressions), flag it: *"[placement X] has limited depth in the current 30-day snapshot — confirm availability before client commitment."* If the pool is healthy, omit this bullet.
 - **Measurement setup** (owner: client + Adlook): which viewability vendor, which brand-lift study (if any), what the reporting cadence is, and who receives the weekly report.
