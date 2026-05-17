@@ -64,43 +64,45 @@ These apply to every section of the output — they are what separates a plan th
 **Chart templates (adapt with real data):**
 
 ```mermaid
-%% Section 3 — Channel gap (adapt channel names and values from Similarweb)
-xychart-beta horizontal
-    title "Display accounts for X% of traffic — the gap this plan closes"
-    x-axis 0 --> 50
-    y-axis ["Direct", "Organic Search", "Paid Search", "Social", "Display ⬅"]
+xychart-beta
+    title "Display = 0.8% of traffic — this plan closes that gap"
+    x-axis ["Direct", "Organic", "Paid Search", "Social", "Display"]
+    y-axis "% of traffic" 0 --> 50
     bar [41, 28, 14, 12, 0.8]
 ```
+*Section 3 template — adapt channel names and % values from `get-websites-traffic-channels`.*
 
 ```mermaid
-%% Section 6A — Budget allocation (adapt slices from placement table)
 pie title "Variant A — Budget allocation by placement"
     "premium-news-PL" : 35
     "sports-HU" : 25
     "finance-DE" : 20
     "lifestyle-GB" : 20
 ```
+*Section 6A template — adapt slice labels (placement + country) and values (% of budget) from the placement table.*
 
 ```
-%% Section 6B — Value Score ranking (Unicode bars, adapt from table)
-Value Score ranking — Variant B placements
-
+Value Score ranking — Variant B
+─────────────────────────────────────────
 sports-PL          ████████████████████ 0.49
 lifestyle-HU       ███████████████░░░░░ 0.38
 tech-DE            ████████████░░░░░░░░ 0.31
 news-BR            ████████░░░░░░░░░░░░ 0.22
 longtail-US        █████░░░░░░░░░░░░░░░ 0.14
+─────────────────────────────────────────
+Higher = more quality impressions per dollar
 ```
+*Section 6B template — Unicode bars, no Mermaid needed. Scale: top score = 20 blocks.*
 
 ```mermaid
-%% Section 7 — A vs B KPI comparison (adapt values from section 7 table)
 xychart-beta
     title "Variant A vs B — the trade-off at a glance"
-    x-axis ["Avg viewability (%)", "Quality score (×100)", "Impr / 1k USD"]
+    x-axis ["Viewability %", "Quality x100", "Impr per 1k USD"]
     y-axis "Score" 0 --> 120
     bar [73, 87, 45]
     bar [62, 71, 103]
 ```
+*Section 7 template — adapt values from the KPI table. Divide Impressions/1k USD by 10 to keep scale comparable to viewability %.*
 
 ---
 
@@ -421,12 +423,12 @@ Confidence legend: ✓ verified = based on real placement historical data; ~ est
 ```mermaid
 xychart-beta
     title "What you get in each variant — the trade-off visualized"
-    x-axis ["Avg viewability (%)", "Quality score (×100)", "Impr / 1k USD (÷10)"]
+    x-axis ["Viewability %", "Quality x100", "Impr per 1k / 10"]
     y-axis "Score" 0 --> 120
-    bar [A_viewability, A_quality×100, A_impr_per_k÷10]
-    bar [B_viewability, B_quality×100, B_impr_per_k÷10]
+    bar [78, 85, 92]
+    bar [64, 71, 160]
 ```
-*(Replace the bracketed values with real numbers from the table above. Divide Impressions/1k USD by 10 to keep it on the same visual scale as viewability %.)*
+*(Replace the example values with real numbers from the table above: viewability %, quality score x100, and impressions per 1k USD divided by 10. Two bars: Variant A then Variant B.)*
 
 **Below the chart, a "How we computed this" subsection:**
 In plain English, explicitly list:
