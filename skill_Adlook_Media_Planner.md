@@ -131,6 +131,26 @@ gantt
 ```
 *Section 10 template — adapt dates from the brief. Critical path items (crit) appear in red. Milestones mark key decision points the client should protect.*
 
+```mermaid
+graph TD
+    Q1{"Viewability floor<br/>≥70% non-negotiable?"}
+    Q2{"Reach or CPM<br/>is primary KPI?"}
+    Q3{"Test-and-learn<br/>before full commit?"}
+    A["Variant A<br/>Best Outcome"]
+    B["Variant B<br/>Best Value"]
+    H["Hybrid A/B<br/>split budget"]
+    Q1 -->|YES| A
+    Q1 -->|NO| Q2
+    Q2 -->|YES| B
+    Q2 -->|NO| Q3
+    Q3 -->|YES| H
+    Q3 -->|NO| A
+    style A fill:#2563eb,color:#fff
+    style B fill:#16a34a,color:#fff
+    style H fill:#7c3aed,color:#fff
+```
+*Section 8 template — adapt questions to the specific conditions from the client's brief and Phase 0 data. Decision nodes ({}) render as diamonds; result nodes ([]) as rectangles.*
+
 ---
 
 ## Mandatory 5-phase flow
@@ -512,6 +532,8 @@ Structure as explicit scenario labels — this makes the content shareable inter
 
 > **Hybrid scenario** (include only if genuinely justified by the data): [if applicable — split ratio + who benefits from each portion. E.g.: "70% A / 30% B makes sense if the campaign has a dual mandate: brand-safe premium launch in PL (A) and exploratory reach in HU/RO where there is no established baseline (B). Not a compromise — a deliberate geo split."] If the data does not support a hybrid, omit this block entirely.
 
+**📊 Variant decision tree — generate after the three scenario blockquotes, before "Our recommendation".** Use the `graph TD` Mermaid template from the "Visual elements" section above. Adapt the three decision questions to the specific conditions from this brief — the questions should come directly from the client's actual KPI language in the brief and the Phase 0 findings. This is the visual a client's media director shares internally to run the pick-a-variant conversation without explaining the full plan.
+
 **Mandatory last line of this section:**
 
 > **Our recommendation: Variant [A / B / hybrid at X%/Y%]** — [one sentence: the single deciding factor, tied to one specific data point from Phase 0 or Phase 3. This must match the "Our pick" line in the Plan at a Glance box exactly — same variant, same reason.]
@@ -520,7 +542,14 @@ This line is what the client puts on their internal meeting agenda. It must be s
 
 ## 9. Inventory limitations and risks
 
-Directly and without softening. Structure as bullets covering these four categories — only skip a category if it genuinely does not apply:
+**Risk summary table — generate first, before the prose bullets.** One row per identified risk. Emoji severity: 🟢 Low (no action needed), 🟡 Medium (monitor), 🔴 High (must resolve before go-live). This table is what Karol reviews before stepping into a client call — it must be complete and scannable in 10 seconds.
+
+| Risk | Severity | Affects | Mitigation |
+|---|---|---|---|
+| [describe risk, e.g. "Pool depth — domain X"] | 🟢/🟡/🔴 | A / B / both | [one-line action] |
+| [next risk] | 🟢/🟡/🔴 | | |
+
+Then provide detailed prose covering these four categories — only skip a category if it genuinely does not apply:
 
 - **Pool depth risk** — list any placement where historical impressions in the 30-day snapshot are less than 3× the campaign's volume requirement. Format: *"[placement X] — pool depth [N] impressions vs [M] required; monitor weekly."*
 - **Format / geo gaps** — if the brief asked for something that barely exists or required a substitution (CTV → video web, city targeting → country-level, etc.), state the substitution explicitly: *"The brief preferred [X]; the pool delivers [Y] instead — [1-sentence reason why Y is the best available alternative]."*
