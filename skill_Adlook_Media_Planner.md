@@ -51,7 +51,7 @@ These apply to every section of the output — they are what separates a plan th
 
 **Mandatory charts in the plan (generate all of these):**
 
-1. **Section 3 — Channel gap chart.** After the Similarweb table, generate a horizontal bar chart showing the client's traffic channel split. Highlight the display bar — it is visually the shortest, and that is the point. Use `xychart-beta` in Mermaid with horizontal orientation, or Unicode bars if simpler. Title must name the gap.
+1. **Section 3 — Channel gap chart.** After the Similarweb table, generate a bar chart showing the client's traffic channel split. The display bar is visually the shortest — that is the point. Use `xychart-beta` in Mermaid (channels on x-axis, % on y-axis). Title must name the gap.
 
 2. **Section 6A — Budget allocation.** After the placement table, generate a `pie` chart showing how the budget is distributed across placements (or markets if multi-geo). Label each slice with the placement/geo name and % of budget. This makes "where the money goes" immediately scannable.
 
@@ -59,7 +59,9 @@ These apply to every section of the output — they are what separates a plan th
 
 4. **Section 7 — A vs B KPI comparison.** After the KPI table, generate a side-by-side visual comparing the two variants on 3 key KPIs: total impressions, avg viewability, and avg eCPM. Use `xychart-beta` or a 3-row Unicode comparison block. The goal: the client sees which variant "wins" on each axis without reading the table.
 
-5. **Section 5 (optional) — Funnel position.** If the campaign has a clear funnel role (awareness / consideration / performance), add a simple text funnel diagram using `graph TD` Mermaid or Unicode arrows showing where this campaign sits and what it feeds into.
+5. **Section 5 — Funnel position diagram (mandatory).** Every plan must show where this campaign sits in the funnel and what it feeds into. Use `graph TD` Mermaid with 3 nodes: AWARENESS / CONSIDERATION / PERFORMANCE. Style the node that this campaign activates in blue; others in grey (future or existing). This chart communicates the strategic role of the plan at a glance without any text.
+
+6. **Section 10 — Campaign timeline (Gantt).** After the bullet list, generate a `gantt` Mermaid chart covering the setup → live → reporting arc. This is the chart clients share internally in kick-off meetings — it makes abstract next steps concrete. Use real dates from the brief; if flight dates are TBC, build from "Adlook can set up within N days of creative receipt."
 
 **Chart templates (adapt with real data):**
 
@@ -103,6 +105,31 @@ xychart-beta
     bar [62, 71, 103]
 ```
 *Section 7 template — adapt values from the KPI table. Divide Impressions/1k USD by 10 to keep scale comparable to viewability %.*
+
+```mermaid
+graph TD
+    A["AWARENESS<br/>Display plan — Sections 6A/6B<br/>This campaign"] --> B["CONSIDERATION<br/>Retargeting — next phase"]
+    B --> C["PERFORMANCE<br/>Paid search — already active"]
+    style A fill:#2563eb,color:#fff
+    style B fill:#94a3b8,color:#fff
+    style C fill:#16a34a,color:#fff
+```
+*Section 5 template — style the node this campaign activates in blue. Adapt labels with real funnel role, phase names, and "already active" / "next phase" markers.*
+
+```mermaid
+gantt
+    title Campaign setup and flight timeline
+    dateFormat YYYY-MM-DD
+    section Preparation
+    Creative delivery (client)    :crit, 2026-06-01, 3d
+    Line item setup (Adlook)      :2026-06-04, 2d
+    section Live
+    Campaign active               :active, 2026-06-06, 28d
+    Mid-flight optimisation       :milestone, m1, 2026-06-20, 0d
+    section Reporting
+    Final report                  :milestone, m2, 2026-07-07, 0d
+```
+*Section 10 template — adapt dates from the brief. Critical path items (crit) appear in red. Milestones mark key decision points the client should protect.*
 
 ---
 
@@ -320,7 +347,7 @@ If Similarweb returned no data (small brand / fresh domain) — write it explici
 
 These three bullets are the reason section 3 exists. Without them, it is a data dump, not a diagnosis. The "Unexpected" bullet is what the client remembers from this plan in their internal meeting.
 
-**📊 Channel gap chart — generate immediately after "Our read".** Use the `xychart-beta horizontal` Mermaid template from the "Visual elements" section above. Real values from `get-websites-traffic-channels`. Title must name the gap explicitly (e.g. *"Display = 0.8% of traffic — the gap this plan addresses"*). If Similarweb returned no data, skip this chart and note why.
+**📊 Channel gap chart — generate immediately after "Our read".** Use the `xychart-beta` Mermaid template from the "Visual elements" section above (channels on x-axis, % share on y-axis). Real values from `get-websites-traffic-channels`. Title must name the gap explicitly (e.g. *"Display = 0.8% of traffic — the gap this plan addresses"*). If Similarweb returned no data, skip this chart and note why.
 
 ## 4. What worked historically in analogous setups (Phase 3 — insights, **anonymized**)
 Result from `get_campaign_insights`, **with no brand or advertiser names**. Use the formula *"a client in industry X with setup Y achieved Z"*.
@@ -352,6 +379,8 @@ Briefly state:
 - Brand safety floor (per variant).
 
 **Close with: "Bottom line:"** — one sentence that captures the strategic bet this plan makes. *"Bottom line: this plan prioritizes quality-verified reach in premium news and sports inventory where analogous campaigns have consistently outperformed, rather than spreading budget across unproven placements."*
+
+**📊 Funnel position diagram — generate at the end of this section, after "Bottom line:".** Use the `graph TD` Mermaid template from the "Visual elements" section above. Style this campaign's funnel node in blue; the other nodes in grey (existing or future). This visual communicates the strategic role of the plan in 3 seconds — no reading required. A client sharing this with their CMO should not need to add any annotation.
 
 ## 6A. Placement selection — Variant A: Best Outcome
 
@@ -481,6 +510,8 @@ Required bullets:
 - **Setup timeline** (owner: Adlook): *"Line items can be activated within [N] business days of creative receipt."* Estimate based on the format mix in the plan — standard display is typically 1–2 days, PMP/deal-ID requires 3–5.
 - **Inventory timing note** (owner: Adlook, conditional): if Phase 1 or Phase 4 revealed a thin pool in any placement (fewer than 3× the campaign volume in available historical impressions), flag it: *"[placement X] has limited depth in the current 30-day snapshot — confirm availability before client commitment."* If the pool is healthy, omit this bullet.
 - **Measurement setup** (owner: client + Adlook): which viewability vendor, which brand-lift study (if any), what the reporting cadence is, and who receives the weekly report.
+
+**📅 Campaign timeline — generate after the bullet list.** Use the `gantt` Mermaid template from the "Visual elements" section above. Adapt dates from the brief. Mark the creative delivery deadline as `crit` (red) — it is always on the client's critical path. This is the visual clients use in their internal kick-off; it transforms a bullet list into an actionable schedule.
 
 ## 11. Why this plan is uniquely reliable
 
