@@ -326,6 +326,18 @@ Where viewability and quality_score are 0–1 (if quality_score returns 0–100,
 ## 1. Recommendation summary
 **Open with a diagnostic statement from Phase 0** — one specific, verifiable finding about the client's digital position that justifies why this plan is structured the way it is. Not "we recommend an awareness campaign" — but "your brand drives X monthly visits in [market] with Y% via direct/branded, while display accounts for only Z% of your traffic mix — this plan closes that consideration gap directly." If Similarweb returned no data, open with a category-level diagnosis from Phase 3 instead.
 
+**Opening diagnostic visual — generate immediately after the first diagnostic sentence.** Show the channel gap as a Unicode bar block. This is the visual hook — the client sees the problem in 5 seconds before reading the solution in prose. Use real values from `get-websites-traffic-channels`:
+
+```
+[Client] digital footprint — [market], [period]
+  Direct          ████████████████████  [X]%
+  Organic Search  ████████████░░░░░░░░  [X]%
+  Paid Search     █████████░░░░░░░░░░░  [X]%
+  Social          █████░░░░░░░░░░░░░░░  [X]%
+  Display         █░░░░░░░░░░░░░░░░░░░  [X]%  ← this campaign closes this gap
+  Category target: [Y]% display (source: Phase 3 benchmark)
+```
+
 Then: 3–4 sentences covering what you offer (two variants A/B), with headline numbers for both — total impressions and avg eCPM. End with a forward pointer: "Section 8 contains our explicit recommendation on which variant to activate."
 
 **If there is a brief vs pool mismatch** (the client asked for a format/device/geo that barely exists in the pool — e.g. brief prefers video but PL automotive video is 1 placement; brief wants CTV but the global CTV pool is 2 placements; brief wants cities 100k+ but Adlook has no city-level targeting) — **call it out in section 1, in the first 2 sentences**. The client must read it immediately, not after scrolling to section 9. Formula: *"The brief prefers [X]; however the current pool [Y] — this plan delivers [Z], full reasoning in section 9."*
@@ -377,6 +389,16 @@ Result from `get_campaign_insights`, **with no brand or advertiser names**. Use 
 - **What we avoid** and why: underperformers in the form *"client in [category] in setup [...] recorded [low KPI] — cause [audience mismatch / low quality score / brand safety]"*. No names.
 - **Segment benchmark:** e.g. *"avg eCPM in SVOD CEE awareness mid-tier = 2.40 USD"*.
 - **Key takeaway** (mandatory closing line): one sentence that draws the through-line from these historical results to the specific placement choices in sections 6A/6B. *"These results directly inform the publisher tier and content type selection in Variant A — the premium news + sports mix that an analogous client used to hit 74% viewability is replicated in placements #1–#3 below."*
+
+**Benchmark vs. plan target table — generate immediately after the Key takeaway.** Three KPIs, four columns. Shows the client how this plan compares to the category baseline — ↑ when the plan target exceeds the benchmark, → when it matches, ↓ with a one-line explanation when it is lower. This makes historical data actionable instead of decorative:
+
+| KPI | Category benchmark (Phase 3) | Variant A target | Variant B target |
+|---|---|---|---|
+| Avg viewability | [X%] | [X%] ↑ / → / ↓ | [X%] ↑ / → / ↓ |
+| Avg eCPM (USD) | [X] | [X] ↑ / → / ↓ | [X] ↑ / → / ↓ |
+| Quality score | [X] | [X] ↑ / → / ↓ | [X] ↑ / → / ↓ |
+
+*[If any cell is ↓, add a one-line note below the table explaining the trade-off — e.g. "Variant B eCPM is below benchmark because mid-tier and long-tail placements are included; this is deliberate — the gain is 2.3× more impressions for the same budget."]*
 
 This is the section that separates the plan from a generic proposal — and at the same time signals to the client that their data, too, will appear here someday as an anonymous benchmark, not as a named brand.
 
@@ -521,6 +543,19 @@ In plain English, explicitly list:
 - **What is a model projection vs a historical benchmark.** Per-placement viewability/eCPM/quality are 90-day historical averages from `inventory_db_*.csv` (source_file visible in the response). Total impressions is a model projection after the sanity check. CTR/VTR is often not returned by `create_media_plan` — then it is a benchmark from `get_campaign_insights` for the anonymized category, and you flag this. Brand lift, conversions, post-view metrics require external measurement (Kantar, IAS, MOAT, client pixel) — Adlook does not project them, and you flag this.
 
 If a number is missing from MCP — mark it "to be confirmed in setup," do not fabricate.
+
+**📊 Plan confidence score — generate at the very end of this section, after "How we computed this".** Count the ✓ verified, ~ estimated, and ⚠ thin pool tags in the KPI table above and generate a visual breakdown. The client sees how much of the plan rests on real data vs projections — this is a trust signal, not a weakness:
+
+```
+Plan confidence breakdown
+  ✓ Verified   ████████████████████  [N] of [total] projections  (30-day historical data)
+  ~ Estimated  ████████░░░░░░░░░░░░  [N] of [total] projections  (category benchmarks)
+  ⚠ Thin pool  ██░░░░░░░░░░░░░░░░░░  [N] of [total] projections  (see Section 9)
+
+Verdict: [HIGH / MEDIUM / LOW] confidence — [one sentence: state what proportion is verified
+and what the single biggest uncertainty is, e.g. "8 of 10 projections are based on verified
+30-day placement data; total impressions estimate is the main model projection."]
+```
 
 ## 8. Variant comparison — which to pick
 
