@@ -323,6 +323,10 @@ Where viewability and quality_score are 0–1 (if quality_score returns 0–100,
 
 ---
 
+> **Contents:** 1 Recommendation · 2 Brief · 3 Market data (Similarweb) · 4 Historical benchmarks · 5 Strategy · 6A Variant A · 6B Variant B · 7 KPIs & confidence · 8 Pick a variant · 9 Risks · 10 Next steps · 11 Why trust this plan
+
+---
+
 ## 1. Recommendation summary
 **Open with a diagnostic statement from Phase 0** — one specific, verifiable finding about the client's digital position that justifies why this plan is structured the way it is. Not "we recommend an awareness campaign" — but "your brand drives X monthly visits in [market] with Y% via direct/branded, while display accounts for only Z% of your traffic mix — this plan closes that consideration gap directly." If Similarweb returned no data, open with a category-level diagnosis from Phase 3 instead.
 
@@ -617,6 +621,14 @@ Three things make the projections in this plan more accurate than a standard pro
 2. **Verified historical benchmarks.** The KPI benchmarks in sections 4 and 7 come from real campaigns in this category, run through the same inventory. They have been anonymized (no client names, no campaign identifiers) but the numbers are real. This is not a "typical industry range" pulled from a trade report.
 
 3. **Independent competitive context.** Section 3 is built from Similarweb's independent measurement of [client domain]'s real digital footprint — channel mix, demographics, competitive set. It was not derived from the brief; it either aligned with the brief or flagged a discrepancy (see section 3).
+
+**Data sources summary — generate this table to close the section.** Fill in the real values from the plan — this makes the "three layers" concrete and verifiable instead of abstract:
+
+| Data source | What it contributed | Key number |
+|---|---|---|
+| Adlook 30-day inventory snapshot | Placement-level viewability, eCPM, quality score | [N] placements across [N] countries in live pool |
+| Campaign insights (anonymized) | Category benchmarks for this industry + goal | [X]% avg viewability · [X] USD avg eCPM in segment |
+| Similarweb independent measurement | Channel mix, demographics, competitive set for [domain] | [X]M monthly visits · display share [X]% in [market] |
 
 *These three layers are why the plan's projections carry a confidence level — and why "better than this" would require data that does not yet exist.*
 
