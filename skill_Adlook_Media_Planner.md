@@ -299,6 +299,7 @@ Where viewability and quality_score are 0–1 (if quality_score returns 0–100,
 > | Brand safety floor | low only | low + medium |
 > | Inventory tier | premium | premium + mid-tier |
 > | Campaign flight | [start – end or "to be confirmed"] | same |
+> | **Wins on** | ✅ viewability · brand safety | ✅ reach · cost efficiency |
 
 ---
 
@@ -400,7 +401,21 @@ Examples of the standard:
 
 Placements with no direct Phase 0 or Phase 3 tie must still justify existence via Phase 1 inventory depth or a concrete content-match argument. "Good fit" without a data anchor is a rejected rationale.
 
-**📊 Budget allocation chart — generate after the table.** Pie chart (`pie` Mermaid) showing each placement's share of Variant A budget. Label slices with placement name + country + %. Use real allocated_budget values from the table above.
+**Top 3 spotlight — generate immediately after the table, before the pie chart.** For the 3 placements with the highest allocated budget, generate one visual card each using blockquote format. The client scans these 3 cards to understand the plan's key bets in under 30 seconds — they must contain real numbers and the same specific data anchor as the Rationale column:
+
+> **#1 · [domain or placement name]** `[COUNTRY]` — [format] / [device]
+> Viewability **[X%]** · Quality **[X]** · eCPM **$[X]** · Allocated **$[X] ([X]% of budget)**
+> *[One sharp rationale sentence — identical logic to the Rationale column, written for a skim-read. One specific data anchor mandatory.]*
+
+> **#2 · [domain or placement name]** `[COUNTRY]` — [format] / [device]
+> Viewability **[X%]** · Quality **[X]** · eCPM **$[X]** · Allocated **$[X] ([X]% of budget)**
+> *[Rationale with data anchor.]*
+
+> **#3 · [domain or placement name]** `[COUNTRY]` — [format] / [device]
+> Viewability **[X%]** · Quality **[X]** · eCPM **$[X]** · Allocated **$[X] ([X]% of budget)**
+> *[Rationale with data anchor.]*
+
+**📊 Budget allocation chart — generate after the top 3 spotlight.** Pie chart (`pie` Mermaid) showing each placement's share of Variant A budget. Label slices with placement name + country + %. Use real allocated_budget values from the table above.
 
 ## 6B. Placement selection — Variant B: Best Value
 
@@ -418,7 +433,21 @@ Examples of the standard:
 - *"Long-tail lifestyle HU — eCPM 0.80 USD vs pool avg 2.18 USD; quality_score 0.71 clears the minimum threshold; reach 3.2× wider for the same allocation."*
 - *"Mid-tier tech vertical BR — analogous category client achieved 66% viewability at 0.95 eCPM in this environment (Phase 3, anonymized); included here as the highest Value Score BR placement in the pool."*
 
-**📊 Value Score ranking chart — generate after the table.** Horizontal Unicode bar chart of all placements sorted by Value Score descending (table is already sorted this way). Scale: highest Value Score = 20 full blocks (`█`), rest proportional. Add the numeric value next to each bar. This is the visual that makes "best value" immediately obvious — the client sees the ranking without reading the columns.
+**Top 3 spotlight — generate immediately after the table, before the Value Score chart.** Same format as 6A, but the label shifts from quality to value — each card states the explicit trade-off being made (what the client gives up and what they gain vs Variant A):
+
+> **#1 · [domain or placement name]** `[COUNTRY]` — [format] / [device]
+> Value Score **[X]** · Viewability **[X%]** · eCPM **$[X]** · Allocated **$[X] ([X]% of budget)**
+> *[Trade-off sentence: what this placement delivers vs the A equivalent, with one concrete number — e.g. "1.75× more viewable impressions per dollar vs the closest A placement, at 64% viewability which still clears the awareness floor."]*
+
+> **#2 · [domain or placement name]** `[COUNTRY]` — [format] / [device]
+> Value Score **[X]** · Viewability **[X%]** · eCPM **$[X]** · Allocated **$[X] ([X]% of budget)**
+> *[Trade-off sentence with data anchor.]*
+
+> **#3 · [domain or placement name]** `[COUNTRY]` — [format] / [device]
+> Value Score **[X]** · Viewability **[X%]** · eCPM **$[X]** · Allocated **$[X] ([X]% of budget)**
+> *[Trade-off sentence with data anchor.]*
+
+**📊 Value Score ranking chart — generate after the top 3 spotlight.** Horizontal Unicode bar chart of all placements sorted by Value Score descending (table is already sorted this way). Scale: highest Value Score = 20 full blocks (`█`), rest proportional. Add the numeric value next to each bar. This is the visual that makes "best value" immediately obvious — the client sees the ranking without reading the columns.
 
 Example format (adapt with real placement names and scores):
 ```
